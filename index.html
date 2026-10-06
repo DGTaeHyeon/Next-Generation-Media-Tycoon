@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>미디어 제국 시뮬레이터</title>
+    
+    <!-- Leaflet CSS & JS (OSM 지도용) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Chart.js (오버톤의 창 시각화용) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root { 
+            --bg: #0f172a; 
+            --card-bg: #1e293b; 
+            --text: #f8fafc; 
+            --primary: #3b82f6; 
+            --danger: #ef4444; 
+            --success: #22c55e; 
+        }
+        body { 
+            font-family: 'Malgun Gothic', sans-serif; 
+            margin: 0; 
+            background: var(--bg); 
+            color: var(--text); 
+        }
+        header { 
+            background: #020617; 
+            padding: 20px 40px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 2px solid var(--primary); 
+        }
+        header h1 { margin: 0; font-size: 24px; color: #e2e8f0; }
+        .hud { display: flex; gap: 30px; font-size: 16px; font-weight: bold; }
+        .hud span { color: #94a3b8; font-weight: normal; }
+        .hud b { color: #f1f5f9; font-size: 18px; }
+        
+        button { 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            padding: 10px 16px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            transition: all 0.2s; 
+        }
+        button:hover { filter: brightness(1.2); }
+        button.danger { background: var(--danger); }
+        button.success { background: var(--success); }
+        
+        .container { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px; 
+            padding: 30px; 
+            max-width: 1600px; 
+            margin: 0 auto; 
+        }
+        .card { 
+            background: var(--card-bg); 
+            padding: 25px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
+            border: 1px solid #334155; 
+        }
+        .card h3 { 
+            margin-top: 0; 
+            border-bottom: 1px solid #334155; 
+            padding-bottom: 10px; 
+            color: #cbd5e1; 
+        }
+        
+        #map { 
+            height: 350px; 
+            border-radius: 8px; 
+            margin-bottom: 15px; 
+            border: 1px solid #475569; 
+            z-index: 1; 
+        }
+        
+        #log-box { 
+            height: 180px; 
+            overflow-y: auto; 
+            background: #0f172a; 
+            padding: 12px; 
+            border-radius: 6px; 
+            font-family: monospace; 
+            font-size: 13px; 
+            color: #a3e635; 
+            border: 1px solid #334155; 
+            line-height: 1.5;
+        }
+        
+        .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        .input-group input, .input-group select { 
+            flex: 1; 
+            padding: 10px; 
+            border-radius: 6px; 
+            border: 1px solid #475569; 
+            background: #0f172a; 
+            color: white; 
+        }
+        
+        .reporter-list { display: flex; flex-direction: column; gap: 10px; }
+        .reporter-item { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            background: #334155; 
+            padding: 12px; 
+            border-radius: 6px; 
+        }
+        .progress-bg { 
+            width: 100px; 
+            height: 10px; 
+            background: #0f172a; 
+            border-radius: 5px; 
+            overflow: hidden; 
+            display: inline-block; 
+            vertical-align: middle; 
+            margin-left: 10px; 
+        }
+        .progress-fill { 
+            height: 100%; 
+            background: var(--danger); 
+            width: 0%; 
+            transition: width 0.3s; 
+        }
+        canvas { max-height: 250px; width: 100%; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>📰 글로벌 미디어 제국 시뮬레이터 “Pro Edition”</h1>
+    <div class="hud">
+        <div><span>연도:</span> <b id="ui-year">1960</b></div>
+        <div><span>자본:</span> <b id="ui-cap">₩ 100,000</b></div>
+        <div><span>신뢰도:</span> <b id="ui-cred">70</b></div>
+        <div><span>영향력:</span> <b id="ui-reach">1,000</b></div>
+    </div>
+    <button class="success" onclick="advanceTurn()" style="font-size: 16px; padding: 12px 24px;">▶ 다음 해로 (Turn End)</button>
+</header>
+
+<div class="container">
+    <!-- 1. 지도 및 방송 인프라 카드 -->
+    <div class="card">
+        <h3>🗺️ 오픈스트리트맵 기반 전파 송출망</h3>
+        <div id="map"></div>
+        <div class="input-group">
+            <input type="text" id="tx-name" value="국경 접경 중계소">
+            <select id="tx-format">
+                <option value="NTSC">NTSC (미주/아시아/한국)</option>
+                <option value="PAL">PAL (서유럽 표준)</option>
+                <option value="SECAM">SECAM (동구권/프랑스)</option>
+            </select>
+            <button onclick="buildTransmitter()">송신탑 설치 (₩30k)</button>
+        </div>
+        <p style="font-size: 13px; color: #94a3b8; margin: 0;">※ 지도에서 클릭하여 설치 좌표를 변경할 수 있습니다. 규격에 따라 전파 색상이 다르게 렌더링됩니다.</p>
+    </div>
+
+    <!-- 2. 오버톤의 창 (이데올로기) 카드 -->
+    <div class="card">
+        <h3>⚖️ 여론 지형 및 오버톤의 창 (Overton Window)</h3>
+        <canvas id="overtonChart"></canvas>
+        <div style="margin-top: 20px;">
+            <label>데스크 논조 설정 (진보 -3 ~ 보수 +3) : <b id="ui-stance" style="color: #ef4444;">0.0</b></label>
+            <input type="range" id="slider-stance" min="-3" max="3" step="0.1" value="0.0" style="width: 100%; margin-top: 10px;" oninput="updateStance(this.value)">
+        </div>
+        <p style="font-size: 13px; color: #94a3b8;">언론사의 영향력이 커질수록 대중 여론(푸른 종형 곡선)을 붉은 점선(데스크 논조) 쪽으로 끌고 올 수 있습니다.</p>
+    </div>
+
+    <!-- 3. 경영 및 이벤트 카드 -->
+    <div class="card">
+        <h3>💼 자본과 저널리즘의 딜레마</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+            <button class="danger" onclick="doAction('scoop')">🔥 대기업 비리 폭로</button>
+            <button onclick="doAction('advertorial')">🤝 기사형 광고(협찬) 발행</button>
+            <button onclick="doAction('mna')">📺 종편/케이블 채널 인수 (₩80k)</button>
+            <button class="success" onclick="doAction('paywall')">🧱 페이월(구독제) 도입</button>
+        </div>
+        <h3>📜 실시간 이벤트 로그</h3>
+        <div id="log-box"></div>
+    </div>
+
+    <!-- 4. HR 및 인사 관리 카드 -->
+    <div class="card">
+        <h3>👥 편집국 인력 관리 (HR & 스트레스)</h3>
+        <p style="font-size: 13px; color: #94a3b8; margin-top: 0;">데스크 논조와 기자의 성향이 다르면 매 턴 스트레스가 누적되며 파업으로 이어집니다.</p>
+        <div class="reporter-list" id="ui-reporters">
+            <!-- JS dynamic generated -->
+        </div>
+        <button style="margin-top: 15px; width: 100%;" onclick="hireReporter()">새 에이스 기자 스카우트 (₩10k)</button>
+    </div>
+</div>
+
+<script>
+    // ----------------------------------------------------
+    // 1. 게임 전역 상태 관리
+    // ----------------------------------------------------
+    let state = {
+        year: 1960,
+        capital: 100000,
+        credibility: 70,
+        reach: 1000,
+        mediaStance: 0.0,
+        overtonMu: 0.0,
+        overtonSigma: 1.0,
+        reporters: [
+            { id: 1, name: "열혈기자 A", stance: -1.5, skill: 85, stress: 10 },
+            { id: 2, name: "중도기자 B", stance: 0.0, skill: 70, stress: 0 },
+            { id: 3, name: "보수기자 C", stance: 2.0, skill: 90, stress: 20 }
+        ],
+        transmitters: [],
+        subsidiaries: []
+    };
+
+    let map, marker, chart;
+    let clickLat = 37.5665, clickLon = 126.9780; // 기본 서울 좌표
+
+    // ----------------------------------------------------
+    // 2. 초기화 함수들 (지도, 차트)
+    // ----------------------------------------------------
+    function initMap() {
+        map = L.map('map').setView([clickLat, clickLon], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+            maxZoom: 18, 
+            attribution: '© OpenStreetMap' 
+        }).addTo(map);
+        
+        marker = L.marker([clickLat, clickLon]).addTo(map);
+        
+        map.on('click', function(e) {
+            clickLat = e.latlng.lat; 
+            clickLon = e.latlng.lng;
+            marker.setLatLng([clickLat, clickLon]);
+        });
+    }
+
+    function initChart() {
+        const ctx = document.getElementById('overtonChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array.from({length: 61}, (_, i) => (i - 30) / 10), // -3.0 ~ 3.0
+                datasets: [
+                    { 
+                        label: '대중 여론 분포 (Overton Window)', 
+                        data: [], 
+                        borderColor: '#3b82f6', 
+                        backgroundColor: 'rgba(59, 130, 246, 0.3)', 
+                        fill: true, 
+                        tension: 0.4,
+                        pointRadius: 0
+                    },
+                    { 
+                        label: '현재 데스크 논조', 
+                        data: [], 
+                        borderColor: '#ef4444', 
+                        borderDash: [5, 5], 
+                        pointRadius: 0, 
+                        borderWidth: 2,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true, 
+                maintainAspectRatio: false,
+                scales: { 
+                    x: { display: true, ticks: { color: '#94a3b8' } }, 
+                    y: { display: false, max: 1.1 } 
+                },
+                plugins: { legend: { labels: { color: '#f1f5f9' } } },
+                animation: { duration: 400 }
+            }
+        });
+        updateChart();
+    }
+
+    // ----------------------------------------------------
+    // 3. UI 렌더링 및 갱신 로직
+    // ----------------------------------------------------
+    function updateChart() {
+        let labels = chart.data.labels;
+        // 정규분포 곡선 그리기
+        let bellCurve = labels.map(x => Math.exp(-0.5 * Math.pow((x - state.overtonMu) / state.overtonSigma, 2)));
+        // 논조 위치를 세로선처럼 표시하기 위해 좁은 범위만 1.0 할당
+        let stanceLine = labels.map(x => (Math.abs(x - state.mediaStance) < 0.05) ? 1.0 : 0);
+        
+        chart.data.datasets[0].data = bellCurve;
+        chart.data.datasets[1].data = stanceLine;
+        chart.update();
+    }
+
+    function logEvent(msg) {
+        let box = document.getElementById('log-box');
+        box.innerHTML += `[${state.year}년] ${msg}<br>`;
+        box.scrollTop = box.scrollHeight;
+    }
+
+    function renderUI() {
+        document.getElementById('ui-year').innerText = state.year;
+        document.getElementById('ui-cap').innerText = '₩ ' + state.capital.toLocaleString();
+        document.getElementById('ui-cred').innerText = state.credibility;
+        document.getElementById('ui-reach').innerText = Math.round(state.reach).toLocaleString();
+        document.getElementById('ui-stance').innerText = state.mediaStance.toFixed(1);
+        
+        let repHTML = '';
+        state.reporters.forEach((r, index) => {
+            let color = r.stress > 80 ? '#ef4444' : (r.stress > 50 ? '#eab308' : '#3b82f6');
+            repHTML += `
+                <div class="reporter-item">
+                    <div>
+                        <b>${r.name}</b> 
+                        <span style="color:#94a3b8; font-size: 13px;">(성향: ${r.stance.toFixed(1)} | 취재력: ${r.skill})</span>
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        <span style="font-size: 12px; color: ${color}; font-weight: bold;">스트레스 ${r.stress}%</span>
+                        <div class="progress-bg">
+                            <div class="progress-fill" style="width: ${r.stress}%; background: ${color};"></div>
+                        </div>
+                        <button style="margin-left: 10px; padding: 4px 8px; font-size: 12px; background: #475569;" onclick="fireReporter(${index})">해고</button>
+                    </div>
+                </div>`;
+        });
+        document.getElementById('ui-reporters').innerHTML = repHTML;
+        updateChart();
+    }
+
+    // ----------------------------------------------------
+    // 4. 게임 핵심 엔진 (턴 진행 및 상호작용)
+    // ----------------------------------------------------
+    function advanceTurn() {
+        state.year++;
+        
+        // 1. 오버톤의 창 역학 (영향력에 따른 여론 흡수)
+        let influence = (state.reach / 30000); // 3만 도달률일 때 최대 흡수력
+        if (influence > 0.4) influence = 0.4;
+        state.overtonMu += (state.mediaStance - state.overtonMu) * influence;
+        
+        // 2. HR 스트레스 및 파업 
+        state.reporters.forEach(r => {
+            let diff = Math.abs(r.stance - state.mediaStance);
+            r.stress += Math.round(diff * 12); // 매 턴 차이의 12배만큼 누적
+            if (r.stress >= 100) {
+                logEvent(`🚨 “${r.name}” 기자, 데스크 횡포에 반발하여 전격 파업 선언!`);
+                state.credibility = Math.max(0, state.credibility - 15);
+                r.stress = 30; // 파업 후 일시적 해소
+            }
+        });
+        
+        // 3. 유지비 차감
+        let cost = 5000 + (state.transmitters.length * 1500) + (state.reporters.length * 1000);
+        state.capital -= cost;
+        logEvent(`인건비 및 송신소 유지비 ₩ ${cost.toLocaleString()} 지출됨.`);
+        
+        if(state.capital <= 0) {
+            alert("“자본이 고갈되어 파산했습니다!” 더 이상 미디어 제국을 유지할 수 없습니다.");
+            location.reload();
+        }
+        renderUI();
+    }
+
+    function updateStance(val) {
+        state.mediaStance = parseFloat(val);
+        document.getElementById('ui-stance').innerText = state.mediaStance.toFixed(1);
+        updateChart();
+    }
+
+    function buildTransmitter() {
+        let name = document.getElementById('tx-name').value;
+        let format = document.getElementById('tx-format').value;
+        let cost = 30000;
+        
+        if (state.capital >= cost) {
+            state.capital -= cost;
+            state.transmitters.push({ lat: clickLat, lon: clickLon, name: name, format: format });
+            state.reach += 4000;
+            
+            // 규격별 송신망 컬러 지정
+            let color = format === 'NTSC' ? '#3b82f6' : (format === 'PAL' ? '#22c55e' : '#ef4444');
+            L.circle([clickLat, clickLon], { 
+                radius: 300000, // 300km 커버리지
+                color: color, 
+                fillOpacity: 0.15 
+            }).addTo(map).bindPopup(`<b>${name}</b><br>규격: ${format}`);
+            
+            logEvent(`📡 “${name}” (${format}) 송신탑 건설 완료. 전파 영역이 크게 확장됩니다!`);
+            renderUI();
+        } else {
+            alert("“자본이 부족합니다!”");
+        }
+    }
+
+    function doAction(action) {
+        if (action === 'scoop') {
+            state.credibility = Math.min(100, state.credibility + 25);
+            state.reach += 1500;
+            state.capital -= 20000;
+            logEvent(`🔥 “대기업 정경유착” 폭로 특종! 신뢰도가 치솟았으나 분노한 대기업들이 광고 보이콧을 선언했습니다.`);
+        } else if (action === 'advertorial') {
+            state.capital += 30000;
+            state.credibility = Math.max(0, state.credibility - 12);
+            logEvent(`🤝 “기사형 광고(협찬)” 대거 게재. 자금난은 숨통이 트였으나 저널리즘 신뢰도가 하락합니다.`);
+        } else if (action === 'mna') {
+            if (state.capital >= 80000) {
+                state.capital -= 80000;
+                state.subsidiaries.push("종편/케이블 채널");
+                state.reach += 8000;
+                logEvent(`📺 “케이블 방송사” 적대적 M&A 성공! 크로스미디어 시너지가 폭발합니다.`);
+            } else {
+                alert("“자본이 부족합니다!”");
+            }
+        } else if (action === 'paywall') {
+            if (state.credibility >= 80) {
+                let revenue = Math.floor(state.reach * 12);
+                state.capital += revenue;
+                state.reach = Math.floor(state.reach * 0.7);
+                logEvent(`🧱 “페이월” 도입 성공! 압도적 신뢰도 덕에 충성 독자들이 ₩ ${revenue.toLocaleString()}을 과금했습니다.`);
+            } else {
+                state.reach = Math.floor(state.reach * 0.3);
+                logEvent(`📉 “페이월” 도입 대실패. 퀄리티 낮은 기사에 지갑을 여는 독자는 없습니다. 트래픽이 붕괴합니다.`);
+            }
+        }
+        renderUI();
+    }
+
+    function hireReporter() {
+        let cost = 10000;
+        if(state.capital >= cost) {
+            state.capital -= cost;
+            let rStance = (Math.random() * 6 - 3);
+            let rSkill = Math.floor(Math.random() * 40 + 60);
+            let idx = Math.floor(Math.random() * 1000);
+            state.reporters.push({ id: idx, name: `스카우트 기자 #${idx}`, stance: rStance, skill: rSkill, stress: 0 });
+            logEvent(`👤 타사 에이스 “기자 #${idx}” 영입 완료. (성향: ${rStance.toFixed(1)})`);
+            renderUI();
+        } else {
+            alert("“자본이 부족합니다!”");
+        }
+    }
+
+    function fireReporter(index) {
+        let repName = state.reporters[index].name;
+        if(confirm(`“${repName}” 기자를 정말 해고하시겠습니까? (위로금 ₩ 5,000 발생)`)) {
+            if(state.capital >= 5000) {
+                state.capital -= 5000;
+                state.reporters.splice(index, 1);
+                logEvent(`👋 “${repName}” 기자가 해고되었습니다.`);
+                renderUI();
+            } else {
+                alert("“위로금을 지급할 자본이 부족합니다!”");
+            }
+        }
+    }
+
+    // 시스템 초기 구동
+    window.onload = () => {
+        initMap();
+        initChart();
+        renderUI();
+        logEvent("글로벌 미디어 제국 시뮬레이터 시스템이 가동되었습니다.");
+    };
+</script>
+</body>
+</html>
