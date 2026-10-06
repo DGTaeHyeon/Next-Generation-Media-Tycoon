@@ -65,10 +65,11 @@ TECH_TREE = [
 
 game_state = {}
 
-def init_game(start_year: int, difficulty: str, capital: int):
+def init_game(company_name: str, start_year: int, difficulty: str, capital: int):
     global game_state
     game_state = {
         "is_started": True,
+        "company_name": company_name,
         "year": start_year,
         "difficulty": difficulty,
         "capital": capital,
@@ -81,7 +82,7 @@ def init_game(start_year: int, difficulty: str, capital: int):
         "infra": [],
         "reporters": [
             {"id": 1, "name": "초창기 기자 A", "stance": -1.0, "stress": 0, "skill": 75},
-            {"id": 2, "name": "초창기 PD B", "stance": 1.5, "stress": 0, "skill": 80}
+            {"id": 2, "name": "초창기 책임자 B", "stance": 1.5, "stress": 0, "skill": 80}
         ],
         "researched_techs": [],
         "triggered_events": [],
@@ -89,16 +90,16 @@ def init_game(start_year: int, difficulty: str, capital: int):
         "foreign_penalty": False,
         "underground_mode": False,
         "subsidiaries": [],
-        "logs": [f"[{start_year}년] 미디어 제국을 창간했습니다."]
+        "logs": [f"[{start_year}년] ‘{company_name}’ 언론사를 창간했습니다."]
     }
 
-class SetupRequest(BaseModel): start_year: int; difficulty: str; capital: int
-class InfraRequest(BaseModel): type: str; name: str; band: str; format: str; power_kw: int; lat: float; lon: float
+class SetupRequest(BaseModel): company_name: str; start_year: int; difficulty: str; capital: int
+class InfraRequest(BaseModel): type: str; name: str; callsign: str = ""; band: str = ""; format: str = ""; power_kw: int; lat: float; lon: float
 class StanceRequest(BaseModel): stance: float
 
 @app.post("/api/setup")
 def setup_game(req: SetupRequest):
-    init_game(req.start_year, req.difficulty, req.capital)
+    init_game(req.company_name, req.start_year, req.difficulty, req.capital)
     return game_state
 
 @app.get("/api/state")
@@ -139,7 +140,7 @@ def advance_year():
         item["durability"] -= 5
         if item["durability"] <= 20:
             maintenance += 8000
-            game_state["logs"].append(f"⚠ ‘{item['name']}’ 장비의 내구도가 한계입니다. 대규모 수리가 필요합니다!")
+            game_state["logs"].append(f"⚠ ‘{item['name']}’의 내구도가 한계입니다. 대규모 수리가 필요합니다!")
         else: maintenance += int(1000 + (item["power_kw"] * 15))
 
     if game_state.get("foreign_penalty"): maintenance += 15000
@@ -156,7 +157,7 @@ def perform_action(action_type: str):
         game_state["credibility"] = min(100, game_state["credibility"] + 25)
         game_state["reach"] += 1500
         game_state["capital"] -= 20000
-        game_state["logs"].append("🔥 “권력 비리” 폭로! 신뢰도가 치솟았으나 기업 광고 보이콧이 발생했습니다.")
+        game_state["logs"].append("🔥 “권력 비리” 폭로! 신뢰도가 치솟았으나 분노한 기업이 광고를 보이콧했습니다.")
     elif action_type == "advertorial":
         game_state["capital"] += 30000
         game_state["credibility"] = max(0, game_state["credibility"] - 12)
@@ -205,14 +206,27 @@ def update_stance(req: StanceRequest):
 @app.post("/api/build_infra")
 def build_infra(req: InfraRequest):
     if game_state.get("underground_mode"): raise HTTPException(status_code=400, detail="지하 언론은 인프라를 지을 수 없습니다.")
-    cost = 20000 + (req.power_kw * 150)
+    
+    if req.type == "Print":
+        cost = 10000 + (req.power_kw * 100)
+        actual_format = "활자 매체"
+        actual_band = "인쇄 지국"
+        reach_gain = req.power_kw * 15
+        log_msg = f"🗞️ ‘{req.name}’ 인쇄/조보 지국 가동 시작! (발행량: {req.power_kw}천 부)"
+    else:
+        cost = 20000 + (req.power_kw * 150)
+        if req.type == "TV" and req.format in ["ATSC", "DVB", "ISDB", "DTMB"]: cost += 50000
+        actual_format = req.format if req.type == "TV" else "해당 없음"
+        actual_band = req.band
+        reach_gain = req.power_kw * 20
+        cs_str = f"[{req.callsign}] " if req.callsign else ""
+        log_msg = f"📡 {cs_str}‘{req.name}’ ({actual_band}/{actual_format}) 송출 가동 시작!"
+        
     if game_state["capital"] >= cost:
         game_state["capital"] -= cost
-        # 형식은 TV일 때만 저장 (라디오는 None으로 넘어옴)
-        actual_format = req.format if req.type == "TV" else "해당 없음"
-        game_state["infra"].append({"type": req.type, "name": req.name, "band": req.band, "format": actual_format, "power_kw": req.power_kw, "durability": 100, "lat": req.lat, "lon": req.lon})
-        game_state["reach"] += req.power_kw * 20
-        game_state["logs"].append(f"📡 ‘{req.name}’ 가동 시작!")
+        game_state["infra"].append({"type": req.type, "name": req.name, "callsign": req.callsign, "band": actual_band, "format": actual_format, "power_kw": req.power_kw, "durability": 100, "lat": req.lat, "lon": req.lon})
+        game_state["reach"] += reach_gain
+        game_state["logs"].append(log_msg)
         return {"status": "success"}
     raise HTTPException(status_code=400, detail="자본이 부족합니다.")
 
