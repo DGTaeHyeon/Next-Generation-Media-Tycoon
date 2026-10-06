@@ -7,85 +7,68 @@ from pydantic import BaseModel
 import google.generativeai as genai
 
 # ==========================================
-# 1. 생성형 AI (Gemini) API 설정 및 동적 프롬프트 엔진
+# 1. 생성형 AI (Gemini) API 설정
 # ==========================================
 GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
 if GEMINI_API_KEY != "YOUR_GEMINI_API_KEY_HERE":
     genai.configure(api_key=GEMINI_API_KEY)
-    # 방대한 국가 리스트 출력을 위해 토큰 제한이 넉넉한 모델 사용
+    # 넉넉한 출력 토큰을 위해 모델 설정
     model = genai.GenerativeModel('gemini-2.5-flash')
 else:
     model = None
 
 def generate_dynamic_event_via_llm(year: int):
-    """
-    모든 예시를 제거하고, 오직 연도 기반의 실제 위키백과 역사적 사건과 
-    이에 파생되는 대체 역사 선택지 5개만을 자유롭게 생성하도록 강제하는 엔진
-    """
     if model is None: return None
     prompt = f"""당신은 ‘글로벌 미디어 제국 대전략 게임’의 역사 이벤트 엔진입니다.
-현재 게임 연도는 {year}년입니다. 1577년부터 2026년 사이의 위키백과 역사를 바탕으로, {year}년 전후의 언론, 미디어, 검열, 통신 기술 관련 글로벌 역사 사건을 하나 선정하여 5개의 대체 역사 선택지를 생성하십시오. 
-어떠한 예시나 가이드라인도 제공하지 않으니, 사건의 역사적 맥락에 맞춰 플레이어가 선택할 수 있는 5가지의 다양한 경로(권력 순응, 극단적 저항, 자본 결탁, 해외 도피 등)를 직접 구상하십시오.
-반드시 마크다운 없이 순수 JSON 객체로만 응답하십시오:
+현재 게임 연도는 {year}년입니다. 1577년부터 2026년 사이의 위키백과 역사를 바탕으로, {year}년 전후의 ‘언론, 검열, 통신’ 관련 글로벌 사건을 하나 선정하여 대체 역사 선택지 5가지를 생성하십시오. 
+어떠한 가이드라인 텍스트 없이 오직 유효한 JSON 객체 하나만 출력하십시오.
 
 {{
   "id": "dynamic_event_{year}",
   "title": "국기 이모지 + 연도 + 사건 명칭",
-  "desc": "이 사건이 미디어 생태계에 미치는 위협이나 기회를 서술",
+  "desc": "이 사건의 위협이나 기회를 서술",
   "choices": [
-    {{"id": "c1", "text": "선택지 텍스트 1", "effect": "선택에 따른 게임 내 결과 1"}},
-    {{"id": "c2", "text": "선택지 텍스트 2", "effect": "선택에 따른 게임 내 결과 2"}},
-    {{"id": "c3", "text": "선택지 텍스트 3", "effect": "선택에 따른 게임 내 결과 3"}},
-    {{"id": "c4", "text": "선택지 텍스트 4", "effect": "선택에 따른 게임 내 결과 4"}},
-    {{"id": "c5", "text": "선택지 텍스트 5", "effect": "선택에 따른 게임 내 결과 5"}}
+    {{"id": "c1", "text": "선택지 1", "effect": "결과 요약"}},
+    {{"id": "c2", "text": "선택지 2", "effect": "결과 요약"}},
+    {{"id": "c3", "text": "선택지 3", "effect": "결과 요약"}},
+    {{"id": "c4", "text": "선택지 4", "effect": "결과 요약"}},
+    {{"id": "c5", "text": "선택지 5", "effect": "결과 요약"}}
   ]
 }}"""
     try:
         response = model.generate_content(prompt)
-        text_response = response.text.strip()
-        if text_response.startswith("```"):
-            text_response = text_response.split("```")[1]
-            if text_response.lower().startswith("json"): text_response = text_response[4:]
-        return json.loads(text_response.strip())
+        text = response.text
+        start = text.find('{')
+        end = text.rfind('}')
+        if start != -1 and end != -1:
+            return json.loads(text[start:end+1])
     except: return None
 
 def generate_countries_via_llm():
-    """
-    개수 제한 없이 전 세계의 모든 현대 국가, UN 회원국, 미승인국, 역사적 제국을
-    최대한 방대하게 생성하는 엔진 (수도 이름 배제)
-    """
     if model is None: return None
-    prompt = """당신은 ‘글로벌 미디어 제국 시뮬레이터’의 지리 및 역사 엔진입니다.
-1577년부터 2026년까지 존재했던 전 세계의 주요 현대 국가, 모든 UN 회원국, 주요 미승인국(대만, 코소보 등), 그리고 역사적 제국(조선, 신성 로마 제국, 대영제국 등)을 최대한 방대하게 포괄하는 국가 데이터 배열을 생성하십시오.
-국가의 수량에 어떠한 제한도 두지 마십시오. 모델의 출력 한계가 허용하는 한 수십, 수백 개의 국가와 제국을 도출하십시오.
-선택지의 label에는 수도 이름을 절대 포함하지 마십시오.
-어떠한 예시 데이터도 제공하지 않으니, 오직 아래의 JSON 배열 스키마를 엄격히 준수하여 응답하십시오. 마크다운 문법(```json)은 절대 사용하지 마십시오.
+    prompt = """당신은 ‘글로벌 미디어 제국 시뮬레이터’의 지리 엔진입니다.
+1577년부터 2026년까지 존재한 전 세계의 주요 현대 국가(UN 회원국), 미승인국(대만, 코소보 등), 그리고 역사적 제국(조선, 신성 로마 제국 등)을 최대한 방대하게(약 60~80개) 생성하십시오.
+출력 제한으로 JSON이 끊기지 않도록 주의하며, 반드시 유효한 JSON 배열([]) 구조로 끝맺어야 합니다. 수도 이름은 포함하지 마십시오.
 
 [
-  {
-    "label": "🌍 전 세계 (지도를 직접 스크롤하여 선택)",
-    "lat": 0.0,
-    "lon": 0.0,
-    "group": "특수"
-  },
-  {
-    "label": "국기 이모지 + 국가명 또는 제국명",
-    "lat": 위도 (실수형),
-    "lon": 경도 (실수형),
-    "group": "대륙 또는 시대별 분류명"
-  }
+  {"label": "🌍 전 세계 (직접 선택)", "lat": 0.0, "lon": 0.0, "group": "특수"},
+  {"label": "🇰🇷 대한민국 / 조선", "lat": 37.566, "lon": 126.978, "group": "동아시아"},
+  {"label": "🇽🇰 코소보", "lat": 42.662, "lon": 21.165, "group": "미승인국 및 특수 지위"}
 ]"""
     try:
         response = model.generate_content(prompt)
-        text_response = response.text.strip()
-        if text_response.startswith("```"):
-            text_response = text_response.split("```")[1]
-            if text_response.lower().startswith("json"): text_response = text_response[4:]
-        return json.loads(text_response.strip())
-    except: return None
+        text = response.text
+        # LLM이 마크다운이나 헛소리를 섞어도 순수 배열만 파싱해내는 안전장치
+        start = text.find('[')
+        end = text.rfind(']')
+        if start != -1 and end != -1:
+            return json.loads(text[start:end+1])
+    except Exception as e:
+        print(f"국가 생성 실패: {e}")
+        return None
 
 # ==========================================
-# 2. 게임 코어 엔진
+# 2. 게임 코어 엔진 및 초기 설정
 # ==========================================
 app = FastAPI()
 
@@ -148,10 +131,14 @@ def get_countries():
         if generated:
             cached_countries = generated
         else:
-            # API 연결 실패 시 작동을 위한 최소한의 Fallback
+            # API 연결 실패 또는 JSON 깨짐 시 절대 터지지 않도록 예비용 거대 배열 제공
             cached_countries = [
                 {"label": "🌍 전 세계 (지도를 직접 스크롤하여 선택)", "lat": 0, "lon": 0, "group": "특수"},
-                {"label": "🇰🇷 대한민국", "lat": 37.566, "lon": 126.978, "group": "아시아"}
+                {"label": "🇰🇷 대한민국 / 조선", "lat": 37.566, "lon": 126.978, "group": "동아시아"},
+                {"label": "🇹🇼 대만 / 중화민국", "lat": 25.033, "lon": 121.565, "group": "동아시아"},
+                {"label": "🇬🇧 영국 / 대영제국", "lat": 51.507, "lon": -0.127, "group": "유럽"},
+                {"label": "🇺🇸 미국", "lat": 38.907, "lon": -77.036, "group": "아메리카"},
+                {"label": "🇽🇰 코소보", "lat": 42.662, "lon": 21.165, "group": "미승인국"}
             ]
     return cached_countries
 
@@ -172,9 +159,9 @@ def advance_year():
         dyn_ev = generate_dynamic_event_via_llm(cy)
         if not dyn_ev: 
             dyn_ev = {"id": f"ev_{cy}", "title": f"🌍 {cy}년: 미디어 격변기", "desc": "거대한 사회적 변화가 도래했습니다.", 
-                      "choices": [{"id":"c1","text":"선택지 생성 실패 1","effect":"-"},{"id":"c2","text":"선택지 생성 실패 2","effect":"-"},
-                                  {"id":"c3","text":"선택지 생성 실패 3","effect":"-"},{"id":"c4","text":"선택지 생성 실패 4","effect":"-"},
-                                  {"id":"c5","text":"선택지 생성 실패 5","effect":"-"}]}
+                      "choices": [{"id":"c1","text":"“순응”","effect":"신뢰도 하락"},{"id":"c2","text":"“결탁”","effect":"타사 흡수"},
+                                  {"id":"c3","text":"“회피”","effect":"영향력 감소"},{"id":"c4","text":"“외세 개입”","effect":"외화 유출"},
+                                  {"id":"c5","text":"“지하 언론화”","effect":"인프라 몰수"}]}
         game_state["pending_event"] = dyn_ev
         return {"status": "event", "event_data": game_state["pending_event"]}
 
@@ -211,7 +198,7 @@ def perform_action(action_type: str):
         game_state["credibility"] = min(100, game_state["credibility"] + 25)
         game_state["reach"] += 1500
         game_state["capital"] -= 20000
-        game_state["logs"].append("🔥 “거악 폭로!” 신뢰도가 치솟았으나 분노한 권력과 대기업이 보이콧했습니다.")
+        game_state["logs"].append("🔥 “거악 폭로!” 신뢰도가 치솟았으나 분노한 권력이 보이콧했습니다.")
     elif action_type == "advertorial":
         game_state["capital"] += 30000
         game_state["credibility"] = max(0, game_state["credibility"] - 12)
@@ -219,7 +206,7 @@ def perform_action(action_type: str):
     elif action_type == "mna":
         if game_state["capital"] >= 80000:
             game_state["capital"] -= 80000
-            game_state["subsidiaries"].append("케이블/종편 채널")
+            game_state["subsidiaries"].append("종편 채널")
             game_state["reach"] += 8000
             game_state["logs"].append("📺 “방송사” 인수 성공! 크로스미디어 시너지가 발생합니다.")
         else: raise HTTPException(status_code=400, detail="자본이 부족합니다.")
@@ -231,7 +218,7 @@ def perform_action(action_type: str):
             game_state["logs"].append(f"🧱 “페이월” 성공! 충성 독자들이 ₩{revenue:,}을 과금했습니다.")
         else:
             game_state["reach"] = int(game_state["reach"] * 0.3)
-            game_state["logs"].append("📉 “페이월” 대실패. 퀄리티 낮은 매체에 지갑을 열 독자는 없습니다.")
+            game_state["logs"].append("📉 “페이월” 대실패. 매체 영향력이 폭락했습니다.")
     return {"status": "success"}
 
 @app.post("/api/hr/{action}")
@@ -306,9 +293,6 @@ def research_tech(tech_id: str):
 @app.post("/api/resolve_event")
 def resolve_event(req: dict):
     c = req.get("choice_id")
-    # AI가 텍스트와 효과를 마음대로 생성하므로, 내부적인 하드코딩 처리 대신
-    # 임의의 변수를 조정하거나 단순히 로그만 남기는 방식으로 처리
-    # (선택지 1~5의 번호에 따라 대략적인 방향성을 잡음)
     if c == "c1": game_state["credibility"] = max(0, game_state["credibility"] - 30); game_state["capital"] += 20000
     elif c == "c2": game_state["credibility"] = 0; game_state["capital"] += 150000; game_state["media_stance"] = 3.0
     elif c == "c3": game_state["reach"] = int(game_state["reach"] * 0.4)
