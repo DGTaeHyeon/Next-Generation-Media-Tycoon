@@ -2,65 +2,52 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>미디어 제국 시뮬레이터</title>
+    <title>글로벌 미디어 제국 시뮬레이터</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --primary: #3b82f6; --text: #f8fafc; }
+        :root { --bg: #0f172a; --card: #1e293b; --primary: #3b82f6; --text: #f8fafc; --danger: #ef4444; --success: #22c55e; }
         body { font-family: 'Malgun Gothic', sans-serif; margin: 0; background: var(--bg); color: var(--text); }
         header { background: #020617; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--primary); }
-        .hud { display: flex; gap: 20px; font-weight: bold; }
+        .hud { display: flex; gap: 20px; font-weight: bold; font-size: 16px; }
         .hud span { color: #94a3b8; font-weight: normal; }
-        button { background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button { background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         button:hover { filter: brightness(1.2); }
+        button.danger { background: var(--danger); }
+        button.success { background: var(--success); }
         .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; max-width: 1500px; margin: 0 auto; }
         .card { background: var(--card); padding: 20px; border-radius: 8px; border: 1px solid #334155; }
         #map { height: 300px; border-radius: 6px; margin-bottom: 15px; }
         .input-box { width: 100%; padding: 10px; margin: 5px 0; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 4px; box-sizing: border-box; }
         
-        /* Modal & Events */
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 2000; }
-        .modal { background: var(--card); padding: 30px; border-radius: 12px; width: 550px; border: 2px solid var(--primary); }
-        #ev-choices { max-height: 350px; overflow-y: auto; padding-right: 10px; }
+        .modal { background: var(--card); padding: 30px; border-radius: 12px; width: 550px; border: 2px solid var(--primary); max-height: 90vh; overflow-y: auto; }
         .event-btn { display: block; width: 100%; margin: 8px 0; padding: 15px; background: #334155; border: 1px solid #475569; color: white; text-align: left; cursor: pointer; border-radius: 6px; }
-        .event-btn:hover { background: #475569; border-color: #ef4444; }
         
-        /* Progress & Lists */
-        .infra-item { background: #0f172a; padding: 12px; margin-bottom: 10px; border: 1px solid #475569; border-radius: 6px; }
-        .progress-bg { background: #334155; height: 10px; border-radius: 5px; margin: 8px 0; overflow: hidden; }
-        .progress-fill { height: 100%; background: #22c55e; }
-        .warn { background: #ef4444 !important; }
-        .log-box { height: 200px; overflow-y: auto; font-family: monospace; font-size: 13px; color: #a3e635; padding: 10px; background: #020617; border: 1px solid #475569; line-height: 1.5; }
+        .reporter-item { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 10px; margin-bottom: 8px; border: 1px solid #475569; border-radius: 6px; }
+        .progress-bg { background: #334155; height: 10px; border-radius: 5px; width: 80px; display: inline-block; margin-left: 10px; }
+        .progress-fill { height: 100%; background: var(--danger); transition: width 0.3s; }
+        .log-box { height: 150px; overflow-y: auto; font-family: monospace; font-size: 13px; color: #a3e635; padding: 10px; background: #020617; border: 1px solid #475569; line-height: 1.5; }
+        canvas { max-height: 200px; width: 100%; }
     </style>
 </head>
 <body>
 
 <div id="setup-modal" class="overlay">
     <div class="modal">
-        <h2 style="color: #3b82f6; text-align: center;">📰 글로벌 미디어 제국 창간</h2>
-        <label><b>시작 연도 설정 (1577 ~ 2026):</b></label>
+        <h2 style="color: #3b82f6; text-align: center;">📰 미디어 제국 창간</h2>
         <input type="number" id="start-year" class="input-box" min="1577" max="2026" value="1840">
-        
-        <label><b>경영 난이도:</b></label>
-        <select id="difficulty" class="input-box">
-            <option value="Easy">쉬움 (유지비 대폭 감소)</option>
-            <option value="Normal" selected>보통</option>
-            <option value="Hard">어려움 (유지비 패널티)</option>
-        </select>
-        
-        <label><b>초기 창업 자본:</b></label>
-        <select id="start-cap" class="input-box">
-            <option value="50000">₩ 50,000 (소자본 영세 언론)</option>
-            <option value="200000" selected>₩ 200,000 (중견 미디어 그룹)</option>
-            <option value="1000000">₩ 1,000,000 (거대 자본 재벌)</option>
-        </select>
-        <button style="width: 100%; margin-top: 20px; padding: 15px; font-size: 16px;" onclick="startGame()">역사 속으로 뛰어들기</button>
+        <select id="difficulty" class="input-box"><option value="Easy">쉬움</option><option value="Normal" selected>보통</option><option value="Hard">어려움</option></select>
+        <select id="start-cap" class="input-box"><option value="50000">₩ 50,000</option><option value="200000" selected>₩ 200,000</option></select>
+        <button style="width: 100%; margin-top: 15px;" onclick="startGame()">역사 속으로 뛰어들기</button>
     </div>
 </div>
 
 <div id="event-modal" class="overlay" style="display: none;">
     <div class="modal" style="border-color: #ef4444;">
         <h2 id="ev-title" style="color: #ef4444;">이벤트 발생</h2>
-        <p id="ev-desc" style="line-height: 1.6;">설명</p>
+        <p id="ev-desc"></p>
         <div id="ev-choices"></div>
     </div>
 </div>
@@ -73,47 +60,55 @@
         <div><span>신뢰도:</span> <b id="ui-cred">-</b></div>
         <div><span>영향력:</span> <b id="ui-reach">-</b></div>
     </div>
-    <button onclick="advanceTurn()" style="background: #22c55e;">▶ 턴 종료 (감가상각 계산)</button>
+    <button onclick="advanceTurn()" class="success">▶ 턴 종료 (다음 해로)</button>
 </header>
 
 <div class="container" id="game-ui" style="display: none;">
+    <!-- 1. 좌측단: 인프라 및 기술 -->
     <div>
         <div class="card">
-            <h3>🗺️ 오픈스트리트맵 기반 전파 할당망</h3>
+            <h3>🗺️ OSM 전파망 구축 및 감가상각</h3>
             <div id="map"></div>
             <div style="display: flex; gap: 10px;">
-                <select id="tx-type" class="input-box">
-                    <option value="Radio">라디오</option>
-                    <option value="TV">텔레비전</option>
-                </select>
-                <select id="tx-band" class="input-box">
-                    <option value="MW">AM 중파</option>
-                    <option value="SW">AM 단파</option>
-                    <option value="FM">FM 초단파</option>
-                    <option value="VHF">TV VHF</option>
-                </select>
-                <select id="tx-format" class="input-box">
-                    <option value="NTSC">NTSC</option>
-                    <option value="PAL">PAL</option>
-                    <option value="SECAM">SECAM</option>
-                    <option value="ATSC">ATSC (디지털)</option>
-                </select>
+                <select id="tx-type" class="input-box"><option value="Radio">라디오</option><option value="TV">TV</option></select>
+                <select id="tx-band" class="input-box"><option value="MW">AM</option><option value="FM">FM</option><option value="VHF">VHF</option></select>
+                <select id="tx-format" class="input-box"><option value="NTSC">NTSC</option><option value="PAL">PAL</option><option value="ATSC">ATSC</option></select>
             </div>
             <div style="display: flex; gap: 10px; margin-top: 5px;">
-                <input type="text" id="tx-name" class="input-box" placeholder="호출부호/이름 (예: HLKV)">
-                <input type="number" id="tx-power" class="input-box" value="50" placeholder="출력(kW)">
-                <button onclick="buildInfra()" style="white-space: nowrap;">건설</button>
+                <input type="text" id="tx-name" class="input-box" placeholder="호출부호/이름">
+                <input type="number" id="tx-power" class="input-box" value="50" placeholder="kW">
+                <button onclick="buildInfra()">건설</button>
             </div>
-            
-            <h4 style="margin-top: 20px; border-bottom: 1px solid #334155;">유지보수 및 감가상각 (Decay)</h4>
-            <div id="infra-list" style="max-height: 250px; overflow-y: auto;"></div>
+            <div id="infra-list" style="max-height: 150px; overflow-y: auto; margin-top: 15px;"></div>
+        </div>
+
+        <div class="card">
+            <h3>🔬 미디어 기술 연구</h3>
+            <div id="tech-list" style="max-height: 150px; overflow-y: auto;"></div>
         </div>
     </div>
 
+    <!-- 2. 우측단: 여론, HR, 딜레마 -->
     <div>
         <div class="card">
-            <h3>🔬 미디어 기술 연구 트리 (Tech Tree)</h3>
-            <div id="tech-list" style="max-height: 250px; overflow-y: auto;"></div>
+            <h3>⚖️ 여론 지형 (오버톤의 창)</h3>
+            <canvas id="overtonChart"></canvas>
+            <input type="range" id="stance-slider" min="-3" max="3" step="0.1" value="0.0" style="width: 100%; margin-top: 10px;" oninput="updateStance(this.value)">
+            <p style="text-align: center; margin: 5px 0;">현재 논조: <b id="ui-stance" style="color: #ef4444;">0.0</b></p>
+        </div>
+
+        <div class="card">
+            <h3>💼 자본과 저널리즘의 딜레마</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                <button class="danger" onclick="doAction('scoop')">🔥 대기업 특종 폭로</button>
+                <button onclick="doAction('advertorial')">🤝 기사형 광고(협찬)</button>
+                <button onclick="doAction('mna')">📺 종편 인수 (₩80k)</button>
+                <button class="success" onclick="doAction('paywall')">🧱 페이월 도입</button>
+            </div>
+
+            <h3 style="border-top: 1px solid #334155; padding-top: 10px;">👥 직원 스트레스 관리 (HR)</h3>
+            <div id="ui-reporters" style="max-height: 150px; overflow-y: auto;"></div>
+            <button style="width: 100%; margin-top: 10px;" onclick="manageHR('hire', 0)">👤 새 직원 스카우트 (₩10k)</button>
         </div>
 
         <div class="card">
@@ -123,10 +118,32 @@
     </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    let map, marker;
+    let map, marker, chart;
     let clickedLat = 37.566, clickedLon = 126.978;
+    let overtonMu = 0.0, mediaStance = 0.0;
+
+    function initChart() {
+        const ctx = document.getElementById('overtonChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array.from({length: 61}, (_, i) => (i - 30) / 10),
+                datasets: [
+                    { label: '대중 여론', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.3)', fill: true, pointRadius: 0 },
+                    { label: '데스크 논조', data: [], borderColor: '#ef4444', borderDash: [5, 5], pointRadius: 0, borderWidth: 2, fill: false }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: '#94a3b8' } }, y: { display: false, max: 1.1 } }, animation: { duration: 400 } }
+        });
+    }
+
+    function updateChart() {
+        let labels = chart.data.labels;
+        chart.data.datasets[0].data = labels.map(x => Math.exp(-0.5 * Math.pow((x - overtonMu) / 1.0, 2)));
+        chart.data.datasets[1].data = labels.map(x => (Math.abs(x - mediaStance) < 0.05) ? 1.0 : 0);
+        chart.update();
+    }
 
     async function startGame() {
         const payload = {
@@ -134,12 +151,7 @@
             difficulty: document.getElementById('difficulty').value,
             capital: parseInt(document.getElementById('start-cap').value)
         };
-        
-        await fetch('/api/setup', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        });
+        await fetch('/api/setup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
         
         document.getElementById('setup-modal').style.display = 'none';
         document.getElementById('game-ui').style.display = 'grid';
@@ -147,18 +159,15 @@
         map = L.map('map').setView([clickedLat, clickedLon], 6);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         marker = L.marker([clickedLat, clickedLon]).addTo(map);
-        map.on('click', function(e) {
-            clickedLat = e.latlng.lat; clickedLon = e.latlng.lng;
-            marker.setLatLng([clickedLat, clickedLon]);
-        });
+        map.on('click', function(e) { clickedLat = e.latlng.lat; clickedLon = e.latlng.lng; marker.setLatLng([clickedLat, clickedLon]); });
         
+        initChart();
         fetchState();
     }
 
     async function fetchState() {
         const res = await fetch('/api/state');
         const data = await res.json();
-        
         if (!data.is_started) return;
 
         document.getElementById('ui-year').innerText = data.year;
@@ -166,21 +175,38 @@
         document.getElementById('ui-cred').innerText = data.credibility;
         document.getElementById('ui-reach').innerText = Math.round(data.reach).toLocaleString();
         
+        overtonMu = data.overton_mu;
+        mediaStance = data.media_stance;
+        updateChart();
+
+        // 인프라 렌더링
         let infraHtml = '';
         data.infra.forEach((inf, idx) => {
-            let durClass = inf.durability <= 20 ? 'progress-fill warn' : 'progress-fill';
-            infraHtml += `
-            <div class="infra-item">
+            infraHtml += `<div class="infra-item">
                 <div style="display:flex; justify-content:space-between;">
-                    <b>${inf.name} <span style="color:#94a3b8;font-size:12px;">(${inf.band}/${inf.format})</span></b>
-                    <button style="padding: 2px 8px; font-size:12px;" onclick="repairInfra(${idx})">오버홀 수리</button>
+                    <b>${inf.name} <span style="font-size:12px;">(${inf.band}/${inf.format})</span></b>
+                    <button style="padding: 2px 8px; font-size:12px;" onclick="repairInfra(${idx})">수리</button>
                 </div>
-                <div style="font-size: 13px; color: #cbd5e1; margin-top: 5px;">내구도: ${inf.durability}% | 출력: ${inf.power_kw}kW</div>
-                <div class="progress-bg"><div class="${durClass}" style="width: ${Math.max(0, inf.durability)}%;"></div></div>
+                <div style="font-size:12px; margin-top:5px;">출력: ${inf.power_kw}kW | 내구도: ${inf.durability}%</div>
             </div>`;
         });
         document.getElementById('infra-list').innerHTML = infraHtml;
 
+        // HR 렌더링
+        let hrHtml = '';
+        data.reporters.forEach((r, idx) => {
+            hrHtml += `<div class="reporter-item">
+                <div><b>${r.name}</b> <span style="font-size:12px;">(성향:${r.stance.toFixed(1)})</span></div>
+                <div style="display:flex; align-items:center;">
+                    <span style="font-size:12px; color:#ef4444;">${r.stress}%</span>
+                    <div class="progress-bg"><div class="progress-fill" style="width:${r.stress}%;"></div></div>
+                    <button style="margin-left:10px; font-size:11px; padding:2px 5px;" onclick="manageHR('fire', ${idx})">해고</button>
+                </div>
+            </div>`;
+        });
+        document.getElementById('ui-reporters').innerHTML = hrHtml;
+
+        // 로그 렌더링
         let logHtml = '';
         data.logs.slice().reverse().forEach(l => logHtml += `<div>${l}</div>`);
         document.getElementById('ui-logs').innerHTML = logHtml;
@@ -191,85 +217,53 @@
     async function loadTechs() {
         const res = await fetch('/api/techs');
         const data = await res.json();
-        
         let html = '';
         data.tree.forEach(t => {
             if(t.invent_year <= data.current_year && !data.researched.includes(t.id)) {
-                let statusInfo = data.current_year >= t.comm_year ? `<span style="color:#ef4444;">상용화됨</span>` : `<span style="color:#22c55e;">발명 단계 (특종 가능)</span>`;
-                html += `
-                <div style="background:#0f172a; padding:10px; margin-bottom:8px; border:1px solid #334155; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <b>${t.name}</b> <span style="font-size:12px; color:#94a3b8;">(${t.invent_year}년)</span><br>
-                        <span style="font-size:12px;">${statusInfo} | ${t.desc}</span>
-                    </div>
-                    <button onclick="researchTech('${t.id}')">₩${t.cost / 1000}k</button>
+                html += `<div style="background:#0f172a; padding:10px; margin-bottom:8px; border:1px solid #334155; display:flex; justify-content:space-between;">
+                    <div><b>${t.name}</b> <span style="font-size:12px;">(${t.invent_year}년)</span><br><span style="font-size:12px;">${t.desc}</span></div>
+                    <button onclick="researchTech('${t.id}')">₩${t.cost/1000}k</button>
                 </div>`;
             }
         });
-        document.getElementById('tech-list').innerHTML = html || '<p style="color:#94a3b8;">현재 해금 가능한 기술이 없습니다.</p>';
+        document.getElementById('tech-list').innerHTML = html;
     }
 
     async function advanceTurn() {
         const res = await fetch('/api/advance_year', {method: 'POST'});
         const result = await res.json();
-        
         if (result.status === 'event') {
             document.getElementById('ev-title').innerText = result.event_data.title;
             document.getElementById('ev-desc').innerText = result.event_data.desc;
             let btns = '';
-            result.event_data.choices.forEach(c => {
-                btns += `<button class="event-btn" onclick="resolveEvent('${c.id}')"><b>${c.text}</b><br><span style="font-size:12px;color:#fbbf24;">${c.effect}</span></button>`;
-            });
+            result.event_data.choices.forEach(c => { btns += `<button class="event-btn" onclick="resolveEvent('${c.id}')"><b>${c.text}</b><br><span style="font-size:12px;color:#fbbf24;">${c.effect}</span></button>`; });
             document.getElementById('ev-choices').innerHTML = btns;
             document.getElementById('event-modal').style.display = 'flex';
-        } else if (result.status === 'game_over') {
-            alert(result.message); location.reload();
-        } else {
-            fetchState();
-        }
+        } else if (result.status === 'game_over') { alert(result.message); location.reload(); }
+        else fetchState();
     }
 
-    async function resolveEvent(choiceId) {
-        await fetch('/api/resolve_event', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({choice_id: choiceId})
-        });
-        document.getElementById('event-modal').style.display = 'none';
-        fetchState();
+    async function updateStance(val) {
+        document.getElementById('ui-stance').innerText = val;
+        await fetch('/api/stance', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({stance: parseFloat(val)}) });
+        mediaStance = parseFloat(val); updateChart();
     }
+
+    async function doAction(type) { await fetch(`/api/action/${type}`, {method: 'POST'}); fetchState(); }
+    async function manageHR(action, idx) { await fetch(`/api/hr/${action}?idx=${idx}`, {method: 'POST'}); fetchState(); }
+    async function resolveEvent(choiceId) { await fetch('/api/resolve_event', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({choice_id: choiceId}) }); document.getElementById('event-modal').style.display = 'none'; fetchState(); }
+    async function repairInfra(idx) { await fetch(`/api/repair/${idx}`, {method: 'POST'}); fetchState(); }
+    async function researchTech(id) { await fetch(`/api/research/${id}`, {method: 'POST'}); fetchState(); }
 
     async function buildInfra() {
         const payload = {
-            type: document.getElementById('tx-type').value,
-            name: document.getElementById('tx-name').value || "이름 없는 송신소",
-            band: document.getElementById('tx-band').value,
-            format: document.getElementById('tx-format').value,
-            power_kw: parseInt(document.getElementById('tx-power').value),
-            lat: clickedLat, lon: clickedLon
+            type: document.getElementById('tx-type').value, name: document.getElementById('tx-name').value || "중계소",
+            band: document.getElementById('tx-band').value, format: document.getElementById('tx-format').value,
+            power_kw: parseInt(document.getElementById('tx-power').value), lat: clickedLat, lon: clickedLon
         };
-        const res = await fetch('/api/build_infra', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        });
-        if(res.ok) {
-            L.circle([clickedLat, clickedLon], {radius: payload.power_kw * 1000, color: 'blue', fillOpacity: 0.2}).addTo(map);
-            fetchState();
-        } else {
-            alert("“자본이 부족하거나 인프라를 지을 수 없는 상태입니다.”");
-        }
-    }
-
-    async function repairInfra(idx) {
-        await fetch(`/api/repair/${idx}`, {method: 'POST'});
-        fetchState();
-    }
-
-    async function researchTech(id) {
-        const res = await fetch(`/api/research/${id}`, {method: 'POST'});
-        if(res.ok) fetchState();
-        else alert("“자본이 부족하거나 아직 발명되지 않았습니다.”");
+        const res = await fetch('/api/build_infra', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        if(res.ok) { L.circle([clickedLat, clickedLon], {radius: payload.power_kw * 1000, color: 'blue', fillOpacity: 0.2}).addTo(map); fetchState(); }
+        else alert("“자본 부족 또는 건설 불가 상태입니다.”");
     }
 </script>
 </body>
