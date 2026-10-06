@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <title>글로벌 미디어 제국 시뮬레이터</title>
+    <!-- Leaflet CSS & JS (OSM 지도용) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js (오버톤의 창 시각화용) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { --bg: #0f172a; --card: #1e293b; --primary: #3b82f6; --text: #f8fafc; --danger: #ef4444; --success: #22c55e; }
@@ -14,18 +16,19 @@
         .hud span { color: #94a3b8; font-weight: normal; }
         button { background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         button:hover { filter: brightness(1.2); }
-        button:disabled { background: #475569; cursor: not-allowed; }
+        button:disabled { background: #475569; cursor: not-allowed; color: #94a3b8; }
         button.danger { background: var(--danger); }
         button.success { background: var(--success); }
         .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; max-width: 1600px; margin: 0 auto; }
         .card { background: var(--card); padding: 20px; border-radius: 8px; border: 1px solid #334155; }
-        #map { height: 280px; border-radius: 6px; margin-bottom: 15px; }
+        #map { height: 280px; border-radius: 6px; margin-bottom: 15px; z-index: 1; }
         .input-box { width: 100%; padding: 10px; margin: 5px 0; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 4px; box-sizing: border-box; }
-        select:disabled { opacity: 0.5; cursor: not-allowed; }
+        select:disabled, input:disabled { opacity: 0.5; cursor: not-allowed; background: #1e293b; }
         
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 2000; }
         .modal { background: var(--card); padding: 30px; border-radius: 12px; width: 550px; border: 2px solid var(--primary); max-height: 90vh; overflow-y: auto; }
-        .event-btn { display: block; width: 100%; margin: 8px 0; padding: 15px; background: #334155; border: 1px solid #475569; color: white; text-align: left; cursor: pointer; border-radius: 6px; }
+        .event-btn { display: block; width: 100%; margin: 8px 0; padding: 15px; background: #334155; border: 1px solid #475569; color: white; text-align: left; cursor: pointer; border-radius: 6px; transition: 0.2s; }
+        .event-btn:hover { background: #475569; border-color: #ef4444; }
         
         .reporter-item { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 10px; margin-bottom: 8px; border: 1px solid #475569; border-radius: 6px; }
         .progress-bg { background: #334155; height: 10px; border-radius: 5px; width: 80px; display: inline-block; margin-left: 10px; }
@@ -36,16 +39,32 @@
 </head>
 <body>
 
+<!-- 게임 시작 설정 모달 -->
 <div id="setup-modal" class="overlay">
     <div class="modal">
-        <h2 style="color: #3b82f6; text-align: center;">📰 미디어 제국 창간</h2>
+        <h2 style="color: #3b82f6; text-align: center;">📰 언론사 창간 (Setup)</h2>
+        <label><b>언론사 이름:</b></label>
+        <input type="text" id="company-name" class="input-box" value="대제국일보">
+        <label><b>시작 연도 (1577 ~ 2026):</b></label>
         <input type="number" id="start-year" class="input-box" min="1577" max="2026" value="1840">
-        <select id="difficulty" class="input-box"><option value="Easy">쉬움</option><option value="Normal" selected>보통</option><option value="Hard">어려움</option></select>
-        <select id="start-cap" class="input-box"><option value="50000">₩ 50,000</option><option value="200000" selected>₩ 200,000</option></select>
-        <button style="width: 100%; margin-top: 15px;" onclick="startGame()">역사 속으로 뛰어들기</button>
+        <label><b>경영 난이도:</b></label>
+        <select id="difficulty" class="input-box">
+            <option value="Easy">쉬움 (유지비 감소)</option>
+            <option value="Normal" selected>보통</option>
+            <option value="Hard">어려움 (유지비 증가)</option>
+        </select>
+        <label><b>초기 창업 자본:</b></label>
+        <select id="start-cap" class="input-box">
+            <option value="50000">₩ 50,000 (스타트업)</option>
+            <option value="100000" selected>₩ 100,000 (표준)</option>
+            <option value="200000">₩ 200,000 (중견 기업)</option>
+            <option value="1000000">₩ 1,000,000 (재벌 자본)</option>
+        </select>
+        <button style="width: 100%; margin-top: 15px; font-size: 16px; padding: 15px;" onclick="startGame()">역사 속으로 뛰어들기</button>
     </div>
 </div>
 
+<!-- 역사적 이벤트 발생 모달 -->
 <div id="event-modal" class="overlay" style="display: none;">
     <div class="modal" style="border-color: #ef4444;">
         <h2 id="ev-title" style="color: #ef4444;">이벤트 발생</h2>
@@ -55,7 +74,7 @@
 </div>
 
 <header>
-    <h2>글로벌 미디어 제국</h2>
+    <h2 id="ui-company-name">글로벌 미디어 제국</h2>
     <div class="hud">
         <div><span>연도:</span> <b id="ui-year">-</b></div>
         <div><span>자본:</span> <b id="ui-cap">-</b></div>
@@ -73,19 +92,21 @@
             <div id="map"></div>
             <div style="display: flex; gap: 10px;">
                 <select id="tx-type" class="input-box" onchange="updateBandFormatOptions()">
-                    <option value="Radio">라디오</option>
-                    <option value="TV">TV</option>
+                    <option value="Print">인쇄소/조보 지국</option>
+                    <option value="Radio">라디오 송신소</option>
+                    <option value="TV">TV 방송국</option>
                 </select>
-                <select id="tx-band" class="input-box">
-                    <!-- JS로 동적 변경 -->
+                <select id="tx-band" class="input-box" disabled>
+                    <option value="Print">인쇄/필사</option>
                 </select>
                 <select id="tx-format" class="input-box" disabled>
-                    <!-- JS로 동적 변경 -->
+                    <option value="None">해당 없음</option>
                 </select>
             </div>
             <div style="display: flex; gap: 10px; margin-top: 5px;">
-                <input type="text" id="tx-name" class="input-box" placeholder="호출부호/이름">
-                <input type="number" id="tx-power" class="input-box" value="50" placeholder="kW">
+                <input type="text" id="tx-name" class="input-box" placeholder="지점/송신소 이름">
+                <input type="text" id="tx-callsign" class="input-box" placeholder="호출부호 없음" disabled style="width: 150px;">
+                <input type="number" id="tx-power" class="input-box" value="50" placeholder="출력/부수" style="width: 100px;">
                 <button onclick="buildInfra()">건설</button>
             </div>
             <div id="infra-list" style="max-height: 150px; overflow-y: auto; margin-top: 15px;"></div>
@@ -132,20 +153,35 @@
     let clickedLat = 37.566, clickedLon = 126.978;
     let overtonMu = 0.0, mediaStance = 0.0;
 
-    // --- 동적 드롭다운 로직 (라디오/TV 구분) ---
+    // --- 인프라 건설 동적 UI 처리 (조보/라디오/TV 완벽 분리) ---
     function updateBandFormatOptions() {
         const typeSelect = document.getElementById('tx-type').value;
         const bandSelect = document.getElementById('tx-band');
         const formatSelect = document.getElementById('tx-format');
+        const callsignInput = document.getElementById('tx-callsign');
 
-        if (typeSelect === 'Radio') {
-            bandSelect.innerHTML = '<option value="LW">AM 장파</option><option value="MW">AM 중파</option><option value="SW">AM 단파</option><option value="FM">FM 초단파</option>';
+        if (typeSelect === 'Print') {
+            bandSelect.innerHTML = '<option value="Print">인쇄/필사</option>';
+            bandSelect.disabled = true;
             formatSelect.innerHTML = '<option value="None">해당 없음</option>';
             formatSelect.disabled = true;
+            callsignInput.disabled = true;
+            callsignInput.value = '';
+            callsignInput.placeholder = "호출부호 없음 (인쇄)";
+        } else if (typeSelect === 'Radio') {
+            bandSelect.innerHTML = '<option value="LW">AM 장파 (LW)</option><option value="MW">AM 중파 (MW)</option><option value="SW">AM 단파 (SW)</option><option value="FM">FM 초단파</option>';
+            bandSelect.disabled = false;
+            formatSelect.innerHTML = '<option value="None">해당 없음</option>';
+            formatSelect.disabled = true;
+            callsignInput.disabled = false;
+            callsignInput.placeholder = "호출부호 (예: HLKV)";
         } else {
             bandSelect.innerHTML = '<option value="VHF">TV VHF</option><option value="UHF">TV UHF</option>';
+            bandSelect.disabled = false;
             formatSelect.innerHTML = '<option value="NTSC">NTSC</option><option value="PAL">PAL</option><option value="SECAM">SECAM</option><option value="ATSC">ATSC</option><option value="DVB">DVB</option><option value="ISDB">ISDB</option><option value="DTMB">DTMB</option>';
             formatSelect.disabled = false;
+            callsignInput.disabled = false;
+            callsignInput.placeholder = "호출부호 (예: HLKV)";
         }
     }
 
@@ -172,25 +208,32 @@
     }
 
     async function startGame() {
-        const payload = {
-            start_year: parseInt(document.getElementById('start-year').value),
-            difficulty: document.getElementById('difficulty').value,
-            capital: parseInt(document.getElementById('start-cap').value)
-        };
-        await fetch('/api/setup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-        
-        document.getElementById('setup-modal').style.display = 'none';
-        document.getElementById('game-ui').style.display = 'grid';
-        
-        updateBandFormatOptions(); // 폼 초기화 실행
-        
-        map = L.map('map').setView([clickedLat, clickedLon], 6);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        marker = L.marker([clickedLat, clickedLon]).addTo(map);
-        map.on('click', function(e) { clickedLat = e.latlng.lat; clickedLon = e.latlng.lng; marker.setLatLng([clickedLat, clickedLon]); });
-        
-        initChart();
-        fetchState();
+        try {
+            const payload = {
+                company_name: document.getElementById('company-name').value || "이름 없는 언론사",
+                start_year: parseInt(document.getElementById('start-year').value),
+                difficulty: document.getElementById('difficulty').value,
+                capital: parseInt(document.getElementById('start-cap').value)
+            };
+            await fetch('/api/setup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            
+            document.getElementById('setup-modal').style.display = 'none';
+            document.getElementById('game-ui').style.display = 'grid';
+            
+            if (!map) {
+                map = L.map('map').setView([clickedLat, clickedLon], 6);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                marker = L.marker([clickedLat, clickedLon]).addTo(map);
+                map.on('click', function(e) { clickedLat = e.latlng.lat; clickedLon = e.latlng.lng; marker.setLatLng([clickedLat, clickedLon]); });
+            }
+            // 모달 닫힘 이후 맵 사이즈 계산 오류 방지
+            setTimeout(() => { map.invalidateSize(); }, 300);
+            
+            initChart();
+            fetchState();
+        } catch (e) {
+            console.error("게임 초기화 오류:", e);
+        }
     }
 
     async function fetchState() {
@@ -198,6 +241,7 @@
         const data = await res.json();
         if (!data.is_started) return;
 
+        document.getElementById('ui-company-name').innerText = data.company_name;
         document.getElementById('ui-year').innerText = data.year;
         document.getElementById('ui-cap').innerText = '₩ ' + data.capital.toLocaleString();
         document.getElementById('ui-cred').innerText = data.credibility;
@@ -210,13 +254,13 @@
         // 인프라 렌더링
         let infraHtml = '';
         data.infra.forEach((inf, idx) => {
-            let formatText = inf.type === 'Radio' ? inf.band : `${inf.band}/${inf.format}`;
+            let cs_str = inf.callsign ? `[${inf.callsign}] ` : "";
             infraHtml += `<div class="infra-item">
                 <div style="display:flex; justify-content:space-between;">
-                    <b>${inf.name} <span style="font-size:12px; color:#94a3b8;">(${formatText})</span></b>
+                    <b>${cs_str}${inf.name} <span style="font-size:12px; color:#94a3b8;">(${inf.band}/${inf.format})</span></b>
                     <button style="padding: 2px 8px; font-size:12px;" onclick="repairInfra(${idx})">수리</button>
                 </div>
-                <div style="font-size:12px; margin-top:5px; color:#cbd5e1;">출력: ${inf.power_kw}kW | 내구도: ${inf.durability}%</div>
+                <div style="font-size:12px; margin-top:5px; color:#cbd5e1;">출력/부수: ${inf.power_kw} | 내구도: ${inf.durability}%</div>
             </div>`;
         });
         document.getElementById('infra-list').innerHTML = infraHtml;
@@ -285,22 +329,25 @@
     async function researchTech(id) { await fetch(`/api/research/${id}`, {method: 'POST'}); fetchState(); }
 
     async function buildInfra() {
+        const typeVal = document.getElementById('tx-type').value;
         const formatSelect = document.getElementById('tx-format');
+        const callsignInput = document.getElementById('tx-callsign');
+        
         const payload = {
-            type: document.getElementById('tx-type').value, 
-            name: document.getElementById('tx-name').value || "중계소",
-            band: document.getElementById('tx-band').value, 
-            format: formatSelect.disabled ? "None" : formatSelect.value,
+            type: typeVal, 
+            name: document.getElementById('tx-name').value || "지점",
+            callsign: callsignInput.disabled ? "" : callsignInput.value,
+            band: document.getElementById('tx-band').disabled ? "" : document.getElementById('tx-band').value, 
+            format: formatSelect.disabled ? "" : formatSelect.value,
             power_kw: parseInt(document.getElementById('tx-power').value), 
             lat: clickedLat, lon: clickedLon
         };
-        
         const res = await fetch('/api/build_infra', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
         if(res.ok) { 
-            let color = payload.type === 'Radio' ? 'green' : 'blue';
+            let color = typeVal === 'Print' ? 'gray' : (typeVal === 'Radio' ? 'green' : 'blue');
             L.circle([clickedLat, clickedLon], {radius: payload.power_kw * 1000, color: color, fillOpacity: 0.2}).addTo(map); 
             fetchState(); 
-        } else alert("“자본 부족 또는 건설 불가 상태입니다.”");
+        } else alert("“자본 부족 또는 지하 언론 상태입니다.”");
     }
 </script>
 </body>
