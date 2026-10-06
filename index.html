@@ -14,12 +14,14 @@
         .hud span { color: #94a3b8; font-weight: normal; }
         button { background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         button:hover { filter: brightness(1.2); }
+        button:disabled { background: #475569; cursor: not-allowed; }
         button.danger { background: var(--danger); }
         button.success { background: var(--success); }
-        .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; max-width: 1500px; margin: 0 auto; }
+        .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; max-width: 1600px; margin: 0 auto; }
         .card { background: var(--card); padding: 20px; border-radius: 8px; border: 1px solid #334155; }
-        #map { height: 300px; border-radius: 6px; margin-bottom: 15px; }
+        #map { height: 280px; border-radius: 6px; margin-bottom: 15px; }
         .input-box { width: 100%; padding: 10px; margin: 5px 0; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 4px; box-sizing: border-box; }
+        select:disabled { opacity: 0.5; cursor: not-allowed; }
         
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 2000; }
         .modal { background: var(--card); padding: 30px; border-radius: 12px; width: 550px; border: 2px solid var(--primary); max-height: 90vh; overflow-y: auto; }
@@ -28,7 +30,7 @@
         .reporter-item { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 10px; margin-bottom: 8px; border: 1px solid #475569; border-radius: 6px; }
         .progress-bg { background: #334155; height: 10px; border-radius: 5px; width: 80px; display: inline-block; margin-left: 10px; }
         .progress-fill { height: 100%; background: var(--danger); transition: width 0.3s; }
-        .log-box { height: 150px; overflow-y: auto; font-family: monospace; font-size: 13px; color: #a3e635; padding: 10px; background: #020617; border: 1px solid #475569; line-height: 1.5; }
+        .log-box { height: 180px; overflow-y: auto; font-family: monospace; font-size: 13px; color: #a3e635; padding: 10px; background: #020617; border: 1px solid #475569; line-height: 1.5; }
         canvas { max-height: 200px; width: 100%; }
     </style>
 </head>
@@ -70,9 +72,16 @@
             <h3>🗺️ OSM 전파망 구축 및 감가상각</h3>
             <div id="map"></div>
             <div style="display: flex; gap: 10px;">
-                <select id="tx-type" class="input-box"><option value="Radio">라디오</option><option value="TV">TV</option></select>
-                <select id="tx-band" class="input-box"><option value="MW">AM</option><option value="FM">FM</option><option value="VHF">VHF</option></select>
-                <select id="tx-format" class="input-box"><option value="NTSC">NTSC</option><option value="PAL">PAL</option><option value="ATSC">ATSC</option></select>
+                <select id="tx-type" class="input-box" onchange="updateBandFormatOptions()">
+                    <option value="Radio">라디오</option>
+                    <option value="TV">TV</option>
+                </select>
+                <select id="tx-band" class="input-box">
+                    <!-- JS로 동적 변경 -->
+                </select>
+                <select id="tx-format" class="input-box" disabled>
+                    <!-- JS로 동적 변경 -->
+                </select>
             </div>
             <div style="display: flex; gap: 10px; margin-top: 5px;">
                 <input type="text" id="tx-name" class="input-box" placeholder="호출부호/이름">
@@ -123,6 +132,23 @@
     let clickedLat = 37.566, clickedLon = 126.978;
     let overtonMu = 0.0, mediaStance = 0.0;
 
+    // --- 동적 드롭다운 로직 (라디오/TV 구분) ---
+    function updateBandFormatOptions() {
+        const typeSelect = document.getElementById('tx-type').value;
+        const bandSelect = document.getElementById('tx-band');
+        const formatSelect = document.getElementById('tx-format');
+
+        if (typeSelect === 'Radio') {
+            bandSelect.innerHTML = '<option value="LW">AM 장파</option><option value="MW">AM 중파</option><option value="SW">AM 단파</option><option value="FM">FM 초단파</option>';
+            formatSelect.innerHTML = '<option value="None">해당 없음</option>';
+            formatSelect.disabled = true;
+        } else {
+            bandSelect.innerHTML = '<option value="VHF">TV VHF</option><option value="UHF">TV UHF</option>';
+            formatSelect.innerHTML = '<option value="NTSC">NTSC</option><option value="PAL">PAL</option><option value="SECAM">SECAM</option><option value="ATSC">ATSC</option><option value="DVB">DVB</option><option value="ISDB">ISDB</option><option value="DTMB">DTMB</option>';
+            formatSelect.disabled = false;
+        }
+    }
+
     function initChart() {
         const ctx = document.getElementById('overtonChart').getContext('2d');
         chart = new Chart(ctx, {
@@ -156,6 +182,8 @@
         document.getElementById('setup-modal').style.display = 'none';
         document.getElementById('game-ui').style.display = 'grid';
         
+        updateBandFormatOptions(); // 폼 초기화 실행
+        
         map = L.map('map').setView([clickedLat, clickedLon], 6);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         marker = L.marker([clickedLat, clickedLon]).addTo(map);
@@ -182,12 +210,13 @@
         // 인프라 렌더링
         let infraHtml = '';
         data.infra.forEach((inf, idx) => {
+            let formatText = inf.type === 'Radio' ? inf.band : `${inf.band}/${inf.format}`;
             infraHtml += `<div class="infra-item">
                 <div style="display:flex; justify-content:space-between;">
-                    <b>${inf.name} <span style="font-size:12px;">(${inf.band}/${inf.format})</span></b>
+                    <b>${inf.name} <span style="font-size:12px; color:#94a3b8;">(${formatText})</span></b>
                     <button style="padding: 2px 8px; font-size:12px;" onclick="repairInfra(${idx})">수리</button>
                 </div>
-                <div style="font-size:12px; margin-top:5px;">출력: ${inf.power_kw}kW | 내구도: ${inf.durability}%</div>
+                <div style="font-size:12px; margin-top:5px; color:#cbd5e1;">출력: ${inf.power_kw}kW | 내구도: ${inf.durability}%</div>
             </div>`;
         });
         document.getElementById('infra-list').innerHTML = infraHtml;
@@ -196,7 +225,7 @@
         let hrHtml = '';
         data.reporters.forEach((r, idx) => {
             hrHtml += `<div class="reporter-item">
-                <div><b>${r.name}</b> <span style="font-size:12px;">(성향:${r.stance.toFixed(1)})</span></div>
+                <div><b>${r.name}</b> <span style="font-size:12px; color:#94a3b8;">(성향:${r.stance.toFixed(1)})</span></div>
                 <div style="display:flex; align-items:center;">
                     <span style="font-size:12px; color:#ef4444;">${r.stress}%</span>
                     <div class="progress-bg"><div class="progress-fill" style="width:${r.stress}%;"></div></div>
@@ -221,7 +250,7 @@
         data.tree.forEach(t => {
             if(t.invent_year <= data.current_year && !data.researched.includes(t.id)) {
                 html += `<div style="background:#0f172a; padding:10px; margin-bottom:8px; border:1px solid #334155; display:flex; justify-content:space-between;">
-                    <div><b>${t.name}</b> <span style="font-size:12px;">(${t.invent_year}년)</span><br><span style="font-size:12px;">${t.desc}</span></div>
+                    <div><b>${t.name}</b> <span style="font-size:12px; color:#94a3b8;">(${t.invent_year}년)</span><br><span style="font-size:12px; color:#cbd5e1;">${t.desc}</span></div>
                     <button onclick="researchTech('${t.id}')">₩${t.cost/1000}k</button>
                 </div>`;
             }
@@ -256,14 +285,22 @@
     async function researchTech(id) { await fetch(`/api/research/${id}`, {method: 'POST'}); fetchState(); }
 
     async function buildInfra() {
+        const formatSelect = document.getElementById('tx-format');
         const payload = {
-            type: document.getElementById('tx-type').value, name: document.getElementById('tx-name').value || "중계소",
-            band: document.getElementById('tx-band').value, format: document.getElementById('tx-format').value,
-            power_kw: parseInt(document.getElementById('tx-power').value), lat: clickedLat, lon: clickedLon
+            type: document.getElementById('tx-type').value, 
+            name: document.getElementById('tx-name').value || "중계소",
+            band: document.getElementById('tx-band').value, 
+            format: formatSelect.disabled ? "None" : formatSelect.value,
+            power_kw: parseInt(document.getElementById('tx-power').value), 
+            lat: clickedLat, lon: clickedLon
         };
+        
         const res = await fetch('/api/build_infra', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-        if(res.ok) { L.circle([clickedLat, clickedLon], {radius: payload.power_kw * 1000, color: 'blue', fillOpacity: 0.2}).addTo(map); fetchState(); }
-        else alert("“자본 부족 또는 건설 불가 상태입니다.”");
+        if(res.ok) { 
+            let color = payload.type === 'Radio' ? 'green' : 'blue';
+            L.circle([clickedLat, clickedLon], {radius: payload.power_kw * 1000, color: color, fillOpacity: 0.2}).addTo(map); 
+            fetchState(); 
+        } else alert("“자본 부족 또는 건설 불가 상태입니다.”");
     }
 </script>
 </body>
