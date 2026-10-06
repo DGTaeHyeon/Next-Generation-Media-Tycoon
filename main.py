@@ -19,7 +19,7 @@ else:
 def generate_dynamic_event_via_llm(year: int):
     if model is None: return None
     prompt = f"""당신은 ‘글로벌 미디어 제국 대전략 게임’의 역사 이벤트 엔진입니다.
-현재 게임 연도는 {year}년입니다. 1577년부터 2026년 사이의 위키백과 역사를 바탕으로, {year}년 전후의 '언론, 검열, 통신' 관련 글로벌 사건을 하나 선정하여 HOI4 스타일 선택지 5가지를 생성하십시오. 
+현재 게임 연도는 {year}년입니다. 1577년부터 2026년 사이의 위키백과 역사를 바탕으로, {year}년 전후의 ‘언론, 검열, 통신’ 관련 글로벌 사건을 하나 선정하여 HOI4 스타일 선택지 5가지를 생성하십시오. 
 반드시 마크다운 없이 순수 JSON으로 응답하십시오:
 {{
   "id": "dynamic_event_{year}",
@@ -48,7 +48,7 @@ def generate_dynamic_event_via_llm(year: int):
 app = FastAPI()
 
 TECH_TREE = [
-    {"id": "tech_jobo", "name": "초기 인쇄 및 민간 조보", "invent_year": 1577, "comm_year": 1577, "cost": 1000, "desc": "수기 필사 및 목판 인쇄 정보 전달"},
+    {"id": "tech_jobo", "name": "민간 조보", "invent_year": 1577, "comm_year": 1577, "cost": 1000, "desc": "수기 필사 정보 전달"},
     {"id": "tech_steam_press", "name": "증기 구동 인쇄기", "invent_year": 1814, "comm_year": 1814, "cost": 15000, "desc": "대량 인쇄 시대 개막"},
     {"id": "tech_telegraph", "name": "유선 전신망", "invent_year": 1837, "comm_year": 1844, "cost": 45000, "desc": "해외 속보 수신"},
     {"id": "tech_rotary_press", "name": "윤전기", "invent_year": 1843, "comm_year": 1846, "cost": 30000, "desc": "옐로 저널리즘 탄생"},
@@ -124,22 +124,22 @@ def advance_year():
     influence = min(0.4, (game_state["reach"] / 30000))
     game_state["overton_mu"] += (game_state["media_stance"] - game_state["overton_mu"]) * influence
 
-    # 3. 기자/PD 스트레스 처리 (이데올로기 충돌)
+    # 3. 기자/PD 스트레스 처리 (HR)
     for rep in game_state["reporters"]:
         diff = abs(rep["stance"] - game_state["media_stance"])
         rep["stress"] += int(diff * 12)
         if rep["stress"] >= 100:
             game_state["credibility"] = max(0, game_state["credibility"] - 15)
             rep["stress"] = 30
-            game_state["logs"].append(f"🚨 “{rep['name']}” 직원이 편집 방향에 반발해 파업을 선언했습니다! (신뢰도 급락)")
+            game_state["logs"].append(f"🚨 ‘{rep['name']}’ 직원이 편집 방향에 반발해 파업을 선언했습니다! (신뢰도 급락)")
 
-    # 4. 인프라 감가상각 및 유지비 차감
+    # 4. 감가상각(Decay)
     maintenance = 3000 + (len(game_state["reporters"]) * 1000)
     for item in game_state["infra"]:
         item["durability"] -= 5
         if item["durability"] <= 20:
             maintenance += 8000
-            game_state["logs"].append(f"⚠ “{item['name']}”의 내구도가 한계입니다. 대규모 수리가 필요합니다!")
+            game_state["logs"].append(f"⚠ ‘{item['name']}’ 장비의 내구도가 한계입니다. 대규모 수리가 필요합니다!")
         else: maintenance += int(1000 + (item["power_kw"] * 15))
 
     if game_state.get("foreign_penalty"): maintenance += 15000
@@ -156,11 +156,11 @@ def perform_action(action_type: str):
         game_state["credibility"] = min(100, game_state["credibility"] + 25)
         game_state["reach"] += 1500
         game_state["capital"] -= 20000
-        game_state["logs"].append("🔥 “권력 비리” 폭로! 신뢰도가 치솟았으나 분노한 대기업이 광고를 보이콧했습니다.")
+        game_state["logs"].append("🔥 “권력 비리” 폭로! 신뢰도가 치솟았으나 기업 광고 보이콧이 발생했습니다.")
     elif action_type == "advertorial":
         game_state["capital"] += 30000
         game_state["credibility"] = max(0, game_state["credibility"] - 12)
-        game_state["logs"].append("🤝 “기사형 광고” 대거 게재. 자금난은 해소되었으나 저널리즘 신뢰도가 하락합니다.")
+        game_state["logs"].append("🤝 “기사형 광고(협찬)” 대거 게재. 자본은 늘었으나 저널리즘 신뢰도가 하락합니다.")
     elif action_type == "mna":
         if game_state["capital"] >= 80000:
             game_state["capital"] -= 80000
@@ -176,7 +176,7 @@ def perform_action(action_type: str):
             game_state["logs"].append(f"🧱 “페이월” 도입 성공! 충성 독자들이 ₩{revenue:,}을 과금했습니다.")
         else:
             game_state["reach"] = int(game_state["reach"] * 0.3)
-            game_state["logs"].append("📉 “페이월” 도입 대실패. 신뢰도 낮은 매체에 지갑을 열 독자는 없습니다.")
+            game_state["logs"].append("📉 “페이월” 도입 대실패. 퀄리티 낮은 매체에 지갑을 열 독자는 없습니다.")
     return {"status": "success"}
 
 @app.post("/api/hr/{action}")
@@ -186,14 +186,14 @@ def manage_hr(action: str, idx: int = 0):
             game_state["capital"] -= 10000
             r_stance = round(random.uniform(-3.0, 3.0), 1)
             r_skill = random.randint(60, 100)
-            game_state["reporters"].append({"id": random.randint(100,999), "name": f"경력직 직원 #{random.randint(100,999)}", "stance": r_stance, "stress": 0, "skill": r_skill})
+            game_state["reporters"].append({"id": random.randint(100,999), "name": f"신입 에이스 #{random.randint(100,999)}", "stance": r_stance, "stress": 0, "skill": r_skill})
             game_state["logs"].append(f"👤 새 직원을 영입했습니다. (성향: {r_stance})")
         else: raise HTTPException(status_code=400, detail="자본이 부족합니다.")
     elif action == "fire":
         if game_state["capital"] >= 5000:
             game_state["capital"] -= 5000
             name = game_state["reporters"].pop(idx)["name"]
-            game_state["logs"].append(f"👋 “{name}” 직원을 해고했습니다. (위로금 ₩5,000 지출)")
+            game_state["logs"].append(f"👋 ‘{name}’ 직원을 해고했습니다. (위로금 ₩5,000 지출)")
         else: raise HTTPException(status_code=400, detail="해고 위로금이 부족합니다.")
     return {"status": "success"}
 
@@ -208,9 +208,11 @@ def build_infra(req: InfraRequest):
     cost = 20000 + (req.power_kw * 150)
     if game_state["capital"] >= cost:
         game_state["capital"] -= cost
-        game_state["infra"].append({"type": req.type, "name": req.name, "band": req.band, "format": req.format, "power_kw": req.power_kw, "durability": 100, "lat": req.lat, "lon": req.lon})
+        # 형식은 TV일 때만 저장 (라디오는 None으로 넘어옴)
+        actual_format = req.format if req.type == "TV" else "해당 없음"
+        game_state["infra"].append({"type": req.type, "name": req.name, "band": req.band, "format": actual_format, "power_kw": req.power_kw, "durability": 100, "lat": req.lat, "lon": req.lon})
         game_state["reach"] += req.power_kw * 20
-        game_state["logs"].append(f"📡 “{req.name}” 가동 시작!")
+        game_state["logs"].append(f"📡 ‘{req.name}’ 가동 시작!")
         return {"status": "success"}
     raise HTTPException(status_code=400, detail="자본이 부족합니다.")
 
@@ -229,7 +231,7 @@ def research_tech(tech_id: str):
         game_state["capital"] -= tech["cost"]
         game_state["researched_techs"].append(tech_id)
         game_state["reach"] += 1000 if game_state["year"] < tech["comm_year"] else 300
-        game_state["logs"].append(f"🧪 “{tech['name']}” R&D 완료.")
+        game_state["logs"].append(f"🧪 ‘{tech['name']}’ R&D 완료.")
         return {"status": "success"}
     raise HTTPException(status_code=400, detail="조건이 충족되지 않았습니다.")
 
