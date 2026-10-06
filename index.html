@@ -45,9 +45,9 @@
         <label><b>언론사 이름:</b></label>
         <input type="text" id="company-name" class="input-box" value="대제국일보">
         
-        <label><b>시작 거점 (AI 동적 로딩):</b></label>
+        <label><b>시작 거점 (AI가 역사 속 제국과 국가를 불러오는 중):</b></label>
         <select id="start-country" class="input-box">
-            <option value="0,0">🌍 AI가 역사적 국가 목록을 불러오는 중...</option>
+            <option value="0,0">데이터 수신 대기 중...</option>
         </select>
 
         <label><b>시작 연도 (1577 ~ 2026):</b></label>
@@ -67,7 +67,7 @@
             <option value="200000">₩ 200,000 (중견 기업)</option>
             <option value="1000000">₩ 1,000,000 (재벌 자본)</option>
         </select>
-        <button id="btn-start" style="width: 100%; margin-top: 15px; font-size: 16px; padding: 15px;" onclick="startGame()" disabled>AI 데이터 준비 중...</button>
+        <button id="btn-start" style="width: 100%; margin-top: 15px; font-size: 16px; padding: 15px;" onclick="startGame()" disabled>AI 국가 데이터 로딩 중...</button>
     </div>
 </div>
 
@@ -165,11 +165,13 @@
     async function loadCountries() {
         try {
             const res = await fetch('/api/countries');
+            if (!res.ok) throw new Error("서버 응답 오류");
+            
             const data = await res.json();
             const select = document.getElementById('start-country');
             let html = '';
-            
             const groups = {};
+            
             data.forEach(c => {
                 if (!groups[c.group]) groups[c.group] = [];
                 groups[c.group].push(c);
@@ -184,16 +186,13 @@
                 html += `</optgroup>`;
             }
             select.innerHTML = html;
-            
+        } catch (e) {
+            console.error("국가 목록 로드 오류:", e);
+            document.getElementById('start-country').innerHTML = '<option value="0,0">🌍 전 세계 (직접 선택)</option><option value="37.566,126.978" selected>🇰🇷 대한민국 (비상 로드)</option>';
+        } finally {
             const btn = document.getElementById('btn-start');
             btn.innerText = "역사 속으로 뛰어들기";
             btn.disabled = false;
-            
-        } catch (e) {
-            console.error("국가 목록 로드 오류:", e);
-            document.getElementById('start-country').innerHTML = '<option value="0,0">🌍 전 세계 (직접 선택)</option>';
-            document.getElementById('btn-start').innerText = "오류 발생 - 이대로 시작하기";
-            document.getElementById('btn-start').disabled = false;
         }
     }
 
@@ -252,9 +251,12 @@
 
     async function startGame() {
         try {
-            const coords = document.getElementById('start-country').value.split(',');
-            clickedLat = parseFloat(coords[0]);
-            clickedLon = parseFloat(coords[1]);
+            const countryVal = document.getElementById('start-country').value;
+            if (countryVal) {
+                const coords = countryVal.split(',');
+                clickedLat = parseFloat(coords[0]);
+                clickedLon = parseFloat(coords[1]);
+            }
             
             let initialZoom = (clickedLat === 0 && clickedLon === 0) ? 2 : 5;
 
@@ -265,7 +267,8 @@
                 capital: parseInt(document.getElementById('start-cap').value)
             };
             
-            await fetch('/api/setup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            const res = await fetch('/api/setup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            if (!res.ok) throw new Error("게임 시작 실패");
             
             document.getElementById('setup-modal').style.display = 'none';
             document.getElementById('game-ui').style.display = 'grid';
@@ -289,55 +292,60 @@
             fetchState();
         } catch (e) {
             console.error("게임 초기화 오류:", e);
+            alert("“게임 초기화 중 서버 오류가 발생했습니다.”");
         }
     }
 
     async function fetchState() {
-        const res = await fetch('/api/state');
-        const data = await res.json();
-        if (!data.is_started) return;
+        try {
+            const res = await fetch('/api/state');
+            const data = await res.json();
+            if (!data.is_started) return;
 
-        document.getElementById('ui-company-name').innerText = data.company_name;
-        document.getElementById('ui-year').innerText = data.year;
-        document.getElementById('ui-cap').innerText = '₩ ' + data.capital.toLocaleString();
-        document.getElementById('ui-cred').innerText = data.credibility;
-        document.getElementById('ui-reach').innerText = Math.round(data.reach).toLocaleString();
-        
-        overtonMu = data.overton_mu;
-        mediaStance = data.media_stance;
-        updateChart();
+            document.getElementById('ui-company-name').innerText = data.company_name;
+            document.getElementById('ui-year').innerText = data.year;
+            document.getElementById('ui-cap').innerText = '₩ ' + data.capital.toLocaleString();
+            document.getElementById('ui-cred').innerText = data.credibility;
+            document.getElementById('ui-reach').innerText = Math.round(data.reach).toLocaleString();
+            
+            overtonMu = data.overton_mu;
+            mediaStance = data.media_stance;
+            updateChart();
 
-        let infraHtml = '';
-        data.infra.forEach((inf, idx) => {
-            let cs_str = inf.callsign ? `[${inf.callsign}] ` : "";
-            infraHtml += `<div class="infra-item">
-                <div style="display:flex; justify-content:space-between;">
-                    <b>${cs_str}${inf.name} <span style="font-size:12px; color:#94a3b8;">(${inf.band}/${inf.format})</span></b>
-                    <button style="padding: 2px 8px; font-size:12px;" onclick="repairInfra(${idx})">수리</button>
-                </div>
-                <div style="font-size:12px; margin-top:5px; color:#cbd5e1;">출력/부수: ${inf.power_kw} | 내구도: ${inf.durability}%</div>
-            </div>`;
-        });
-        document.getElementById('infra-list').innerHTML = infraHtml;
+            let infraHtml = '';
+            data.infra.forEach((inf, idx) => {
+                let cs_str = inf.callsign ? `[${inf.callsign}] ` : "";
+                infraHtml += `<div class="infra-item">
+                    <div style="display:flex; justify-content:space-between;">
+                        <b>${cs_str}${inf.name} <span style="font-size:12px; color:#94a3b8;">(${inf.band}/${inf.format})</span></b>
+                        <button style="padding: 2px 8px; font-size:12px;" onclick="repairInfra(${idx})">수리</button>
+                    </div>
+                    <div style="font-size:12px; margin-top:5px; color:#cbd5e1;">출력/부수: ${inf.power_kw} | 내구도: ${inf.durability}%</div>
+                </div>`;
+            });
+            document.getElementById('infra-list').innerHTML = infraHtml;
 
-        let hrHtml = '';
-        data.reporters.forEach((r, idx) => {
-            hrHtml += `<div class="reporter-item">
-                <div><b>${r.name}</b> <span style="font-size:12px; color:#94a3b8;">(성향:${r.stance.toFixed(1)})</span></div>
-                <div style="display:flex; align-items:center;">
-                    <span style="font-size:12px; color:#ef4444;">${r.stress}%</span>
-                    <div class="progress-bg"><div class="progress-fill" style="width:${r.stress}%;"></div></div>
-                    <button style="margin-left:10px; font-size:11px; padding:2px 5px;" onclick="manageHR('fire', ${idx})">해고</button>
-                </div>
-            </div>`;
-        });
-        document.getElementById('ui-reporters').innerHTML = hrHtml;
+            let hrHtml = '';
+            data.reporters.forEach((r, idx) => {
+                hrHtml += `<div class="reporter-item">
+                    <div><b>${r.name}</b> <span style="font-size:12px; color:#94a3b8;">(성향:${r.stance.toFixed(1)})</span></div>
+                    <div style="display:flex; align-items:center;">
+                        <span style="font-size:12px; color:#ef4444;">${r.stress}%</span>
+                        <div class="progress-bg"><div class="progress-fill" style="width:${r.stress}%;"></div></div>
+                        <button style="margin-left:10px; font-size:11px; padding:2px 5px;" onclick="manageHR('fire', ${idx})">해고</button>
+                    </div>
+                </div>`;
+            });
+            document.getElementById('ui-reporters').innerHTML = hrHtml;
 
-        let logHtml = '';
-        data.logs.slice().reverse().forEach(l => logHtml += `<div>${l}</div>`);
-        document.getElementById('ui-logs').innerHTML = logHtml;
+            let logHtml = '';
+            data.logs.slice().reverse().forEach(l => logHtml += `<div>${l}</div>`);
+            document.getElementById('ui-logs').innerHTML = logHtml;
 
-        loadTechs();
+            loadTechs();
+        } catch (e) {
+            console.error("상태 갱신 오류:", e);
+        }
     }
 
     async function loadTechs() {
