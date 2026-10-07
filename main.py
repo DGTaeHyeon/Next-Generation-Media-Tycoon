@@ -2,7 +2,7 @@ import os
 import json
 import random
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import google.generativeai as genai
 
