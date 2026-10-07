@@ -1,0 +1,26 @@
+:root { --bg: #0f172a; --card: #1e293b; --primary: #3b82f6; --text: #f8fafc; --danger: #ef4444; --success: #22c55e; }
+body { font-family: 'Malgun Gothic', sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+header { background: #020617; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--primary); }
+.hud { display: flex; gap: 20px; font-weight: bold; font-size: 16px; }
+.hud span { color: #94a3b8; font-weight: normal; }
+button { background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+button:hover { filter: brightness(1.2); }
+button:disabled { background: #475569; cursor: not-allowed; color: #94a3b8; }
+button.danger { background: var(--danger); }
+button.success { background: var(--success); }
+.container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 20px; max-width: 1600px; margin: 0 auto; }
+.card { background: var(--card); padding: 20px; border-radius: 8px; border: 1px solid #334155; }
+#map, #setup-map { height: 280px; border-radius: 6px; margin-bottom: 15px; z-index: 1; }
+.input-box { width: 100%; padding: 10px; margin: 5px 0; background: #0f172a; color: white; border: 1px solid #475569; border-radius: 4px; box-sizing: border-box; }
+select:disabled, input:disabled { opacity: 0.5; cursor: not-allowed; background: #1e293b; }
+        
+.overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 2000; }
+.modal { background: var(--card); padding: 30px; border-radius: 12px; width: 550px; border: 2px solid var(--primary); max-height: 90vh; overflow-y: auto; }
+.event-btn { display: block; width: 100%; margin: 8px 0; padding: 15px; background: #334155; border: 1px solid #475569; color: white; text-align: left; cursor: pointer; border-radius: 6px; transition: 0.2s; }
+.event-btn:hover { background: #475569; border-color: #ef4444; }
+        
+.reporter-item { display: flex; justify-content: space-between; align-items: center; background: #0f172a; padding: 10px; margin-bottom: 8px; border: 1px solid #475569; border-radius: 6px; }
+.progress-bg { background: #334155; height: 10px; border-radius: 5px; width: 80px; display: inline-block; margin-left: 10px; }
+.progress-fill { height: 100%; background: var(--danger); transition: width 0.3s; }
+.log-box { height: 180px; overflow-y: auto; font-family: monospace; font-size: 13px; color: #a3e635; padding: 10px; background: #020617; border: 1px solid #475569; line-height: 1.5; }
+canvas { max-height: 200px; width: 100%; }
