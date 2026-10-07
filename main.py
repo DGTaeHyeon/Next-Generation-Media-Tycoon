@@ -72,10 +72,16 @@ def generate_countries_via_llm():
 # ==========================================
 app = FastAPI()
 
-# 깃허브 페이지 등 외부 HTML에서 API를 호출할 수 있도록 CORS 허용
+# 깃허브 페이지 주소와 로컬 환경만 허용 목록에 명시하시오!
+origins = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://본인의-깃허브-닉네임.github.io" # 실제 깃허브 페이지 도메인으로 바꾸시오!
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
