@@ -3,7 +3,6 @@ import json
 import random
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import google.generativeai as genai
 
@@ -19,7 +18,7 @@ else:
 
 def generate_dynamic_event_via_llm(year: int):
     if model is None: return None
-    prompt = f"""당신은 ‘글로벌 미디어 제국 대전략 게임’의 역사 이벤트 엔진입니다.
+    prompt = f"""당신은 '글로벌 미디어 제국 대전략 게임'의 역사 이벤트 엔진입니다.
 현재 게임 연도는 {year}년입니다. 1577년부터 2026년 사이의 위키백과 역사를 바탕으로, {year}년 전후의 언론, 미디어, 검열, 통신 기술 관련 글로벌 역사 사건을 하나 선정하여 5개의 대체 역사 선택지를 생성하십시오. 
 어떠한 예시나 가이드라인도 제공하지 않으니, 사건의 역사적 맥락에 맞춰 플레이어가 선택할 수 있는 5가지의 다양한 경로(권력 순응, 극단적 저항, 자본 결탁, 해외 도피 등)를 직접 구상하십시오.
 반드시 마크다운 없이 순수 JSON 객체로만 응답하십시오:
@@ -46,20 +45,13 @@ def generate_dynamic_event_via_llm(year: int):
     except: return None
 
 # ==========================================
-# 2. 게임 코어 엔진
+# 2. 게임 코어 엔진 및 API 라우트
 # ==========================================
 app = FastAPI()
 
-# 깃허브 페이지 주소와 로컬 환경만 허용 목록에 명시하시오!
-origins = [
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "https://dgtaehyeon.github.io/Next-Generation-Media-Tycoon/"
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"], # 모든 도메인 허용 (개발 및 깃허브 배포 시 충돌 방지)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -82,7 +74,11 @@ TECH_TREE = [
 ]
 
 game_state = {}
-cached_countries = None
+
+class SetupRequest(BaseModel): company_name: str; start_year: int; difficulty: str; capital: int
+class InfraRequest(BaseModel): type: str; name: str; callsign: str = ""; band: str = ""; format: str = ""; power_kw: int; lat: float; lon: float
+class StanceRequest(BaseModel): stance: float
+class GeoRequest(BaseModel): lat: float; lon: float; year: int
 
 def init_game(company_name: str, start_year: int, difficulty: str, capital: int):
     global game_state
@@ -109,17 +105,8 @@ def init_game(company_name: str, start_year: int, difficulty: str, capital: int)
         "foreign_penalty": False,
         "underground_mode": False,
         "subsidiaries": [],
-        "logs": [f"[{start_year}년] ‘{company_name}’ 언론사를 창간했습니다."]
+        "logs": [f"[{start_year}년] '{company_name}' 언론사를 창간했습니다."]
     }
-
-class SetupRequest(BaseModel): company_name: str; start_year: int; difficulty: str; capital: int
-class InfraRequest(BaseModel): type: str; name: str; callsign: str = ""; band: str = ""; format: str = ""; power_kw: int; lat: float; lon: float
-class StanceRequest(BaseModel): stance: float
-
-class GeoRequest(BaseModel):
-    lat: float
-    lon: float
-    year: int
 
 @app.post("/api/get_historical_country")
 def get_historical_country(req: GeoRequest):
@@ -134,8 +121,7 @@ def get_historical_country(req: GeoRequest):
     
     try:
         response = model.generate_content(prompt)
-        country_name = response.text.strip()
-        country_name = country_name.replace("\"", "").replace("'", "").replace("`", "")
+        country_name = response.text.strip().replace("\"", "").replace("'", "").replace("`", "")
         return {"country": country_name}
     except Exception as e:
         print(f"지리 판별 실패: {e}")
@@ -173,14 +159,14 @@ def advance_year():
         if rep["stress"] >= 100:
             game_state["credibility"] = max(0, game_state["credibility"] - 15)
             rep["stress"] = 30
-            game_state["logs"].append(f"🚨 ‘{rep['name']}’ 직원이 편집 방향에 반발해 파업을 선언했습니다! (신뢰도 급락)")
+            game_state["logs"].append(f"🚨 '{rep['name']}' 직원이 편집 방향에 반발해 파업을 선언했습니다! (신뢰도 급락)")
 
     maintenance = 3000 + (len(game_state["reporters"]) * 1000)
     for item in game_state["infra"]:
         item["durability"] -= 5
         if item["durability"] <= 20:
             maintenance += 8000
-            game_state["logs"].append(f"⚠ ‘{item['name']}’의 내구도가 한계입니다. 대규모 수리가 필요합니다!")
+            game_state["logs"].append(f"⚠ '{item['name']}'의 내구도가 한계입니다. 대규모 수리가 필요합니다!")
         else: maintenance += int(1000 + (item["power_kw"] * 15))
 
     if game_state.get("foreign_penalty"): maintenance += 15000
@@ -234,7 +220,7 @@ def manage_hr(action: str, idx: int = 0):
         if game_state["capital"] >= 5000:
             game_state["capital"] -= 5000
             name = game_state["reporters"].pop(idx)["name"]
-            game_state["logs"].append(f"👋 ‘{name}’ 직원을 해고했습니다. (위로금 ₩5,000 지출)")
+            game_state["logs"].append(f"👋 '{name}' 직원을 해고했습니다. (위로금 ₩5,000 지출)")
         else: raise HTTPException(status_code=400, detail="해고 위로금이 부족합니다.")
     return {"status": "success"}
 
@@ -252,7 +238,7 @@ def build_infra(req: InfraRequest):
         actual_format = "활자 매체"
         actual_band = "인쇄 지국"
         reach_gain = req.power_kw * 15
-        log_msg = f"🗞️ ‘{req.name}’ 인쇄 지국 가동! (발행량: {req.power_kw}천 부)"
+        log_msg = f"🗞️ '{req.name}' 인쇄 지국 가동! (발행량: {req.power_kw}천 부)"
     else:
         cost = 20000 + (req.power_kw * 150)
         if req.type == "TV" and req.format in ["ATSC", "DVB", "ISDB", "DTMB"]: cost += 50000
@@ -260,7 +246,7 @@ def build_infra(req: InfraRequest):
         actual_band = req.band
         reach_gain = req.power_kw * 20
         cs_str = f"[{req.callsign}] " if req.callsign else ""
-        log_msg = f"📡 {cs_str}‘{req.name}’ ({actual_band}/{actual_format}) 송출 가동!"
+        log_msg = f"📡 {cs_str}'{req.name}' ({actual_band}/{actual_format}) 송출 가동!"
         
     if game_state["capital"] >= cost:
         game_state["capital"] -= cost
@@ -285,7 +271,7 @@ def research_tech(tech_id: str):
         game_state["capital"] -= tech["cost"]
         game_state["researched_techs"].append(tech_id)
         game_state["reach"] += 1000 if game_state["year"] < tech["comm_year"] else 300
-        game_state["logs"].append(f"🧪 ‘{tech['name']}’ R&D 완료.")
+        game_state["logs"].append(f"🧪 '{tech['name']}' R&D 완료.")
         return {"status": "success"}
     raise HTTPException(status_code=400, detail="조건이 충족되지 않았습니다.")
 
@@ -306,7 +292,3 @@ def resolve_event(req: dict):
 
 @app.get("/api/techs")
 def get_techs(): return {"tree": TECH_TREE, "researched": game_state.get("researched_techs", []), "current_year": game_state.get("year", 1577)}
-
-@app.get("/", response_class=HTMLResponse)
-def serve_frontend():
-    with open("index.html", "r", encoding="utf-8") as f: return f.read()
