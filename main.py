@@ -45,28 +45,6 @@ def generate_dynamic_event_via_llm(year: int):
             return json.loads(text[start:end+1])
     except: return None
 
-def generate_countries_via_llm():
-    if model is None: return None
-    prompt = """당신은 ‘글로벌 미디어 제국 시뮬레이터’의 지리 엔진입니다.
-1577년부터 2026년까지 존재한 전 세계의 주요 현대 국가, 모든 UN 회원국, 주요 미승인국(대만, 코소보 등), 그리고 역사적 제국(조선, 신성 로마 제국, 대영제국 등)을 최대한 방대하게 포괄하는 국가 데이터 배열을 생성하십시오.
-국가의 수량에 어떠한 제한도 두지 마십시오. 모델의 출력 한계가 허용하는 한 최대한 많은 국가와 제국을 도출하십시오.
-선택지의 label에는 수도 이름을 절대 포함하지 마십시오. 반드시 유효한 JSON 배열([]) 구조로 끝맺어야 합니다.
-
-[
-  {"label": "🌍 전 세계 (지도를 직접 스크롤하여 선택)", "lat": 0.0, "lon": 0.0, "group": "특수"},
-  {"label": "국기 이모지 + 국가명/제국명", "lat": 위도, "lon": 경도, "group": "대륙 또는 시대별 분류명"}
-]"""
-    try:
-        response = model.generate_content(prompt)
-        text = response.text
-        start = text.find('[')
-        end = text.rfind(']')
-        if start != -1 and end != -1:
-            return json.loads(text[start:end+1])
-    except Exception as e:
-        print(f"국가 생성 실패: {e}")
-        return None
-
 # ==========================================
 # 2. 게임 코어 엔진
 # ==========================================
@@ -138,21 +116,30 @@ class SetupRequest(BaseModel): company_name: str; start_year: int; difficulty: s
 class InfraRequest(BaseModel): type: str; name: str; callsign: str = ""; band: str = ""; format: str = ""; power_kw: int; lat: float; lon: float
 class StanceRequest(BaseModel): stance: float
 
-@app.get("/api/countries")
-def get_countries():
-    global cached_countries
-    if not cached_countries:
-        generated = generate_countries_via_llm()
-        if generated:
-            cached_countries = generated
-        else:
-            # API 연결 실패 또는 JSON 깨짐 시 절대 터지지 않도록 예비용 거대 배열 제공
-            cached_countries = [
-                {"label": "🌍 전 세계 (지도를 직접 스크롤하여 선택)", "lat": 0, "lon": 0, "group": "특수"},
-                {"label": "🇰🇷 대한민국 / 조선", "lat": 37.566, "lon": 126.978, "group": "동아시아"},
-                {"label": "🇬🇧 영국 / 대영제국", "lat": 51.507, "lon": -0.127, "group": "유럽"}
-            ]
-    return cached_countries
+class GeoRequest(BaseModel):
+    lat: float
+    lon: float
+    year: int
+
+@app.post("/api/get_historical_country")
+def get_historical_country(req: GeoRequest):
+    if model is None: 
+        return {"country": "오프라인 영토"}
+        
+    prompt = f"""당신은 '글로벌 미디어 제국 시뮬레이터'의 역사 지리 엔진입니다.
+현재 연도는 {req.year}년이며, 플레이어가 언론사를 창간하려는 거점의 좌표는 위도 {req.lat}, 경도 {req.lon}입니다.
+이 좌표가 {req.year}년 당시에 속해 있던 국가, 제국, 부족 국가, 혹은 식민지 명칭을 정확히 하나만 도출하십시오.
+(예시: '조선', '대영제국', '신성 로마 제국', '오스만 제국', '청나라' 등)
+반드시 국기 이모지를 포함하여 어떠한 부연 설명도 없이 국가 명칭만 단답형 문자열로 응답하십시오."""
+    
+    try:
+        response = model.generate_content(prompt)
+        country_name = response.text.strip()
+        country_name = country_name.replace("\"", "").replace("'", "").replace("`", "")
+        return {"country": country_name}
+    except Exception as e:
+        print(f"지리 판별 실패: {e}")
+        return {"country": "미지의 영토"}
 
 @app.post("/api/setup")
 def setup_game(req: SetupRequest):
