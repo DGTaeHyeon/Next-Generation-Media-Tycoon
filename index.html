@@ -45,9 +45,9 @@
         <label><b>언론사 이름:</b></label>
         <input type="text" id="company-name" class="input-box" value="대제국일보">
         
-        <label><b>시작 거점 (AI가 역사 속 제국과 국가를 불러오는 중):</b></label>
+        <label><b>시작 거점 (AI가 역사적 국가 목록을 무한 생성 중):</b></label>
         <select id="start-country" class="input-box">
-            <option value="0,0">데이터 수신 대기 중...</option>
+            <option value="0,0">🌍 백엔드 AI 통신 대기 중...</option>
         </select>
 
         <label><b>시작 연도 (1577 ~ 2026):</b></label>
@@ -67,7 +67,7 @@
             <option value="200000">₩ 200,000 (중견 기업)</option>
             <option value="1000000">₩ 1,000,000 (재벌 자본)</option>
         </select>
-        <button id="btn-start" style="width: 100%; margin-top: 15px; font-size: 16px; padding: 15px;" onclick="startGame()" disabled>AI 국가 데이터 로딩 중...</button>
+        <button id="btn-start" style="width: 100%; margin-top: 15px; font-size: 16px; padding: 15px;" onclick="startGame()" disabled>AI 데이터 로딩 중...</button>
     </div>
 </div>
 
@@ -154,6 +154,10 @@
 </div>
 
 <script>
+    // 배포 환경(GitHub Pages)과 로컬 서버를 맞추기 위한 API 경로 설정
+    // 파이썬 서버(uvicorn)가 켜져 있는 주소를 기입해야 외부에서 접근할 수 있습니다.
+    const API_BASE = "http://127.0.0.1:8000"; 
+    
     let map, marker, chart;
     let clickedLat = 37.566, clickedLon = 126.978;
     let overtonMu = 0.0, mediaStance = 0.0;
@@ -164,7 +168,7 @@
 
     async function loadCountries() {
         try {
-            const res = await fetch('/api/countries');
+            const res = await fetch(`${API_BASE}/api/countries`);
             if (!res.ok) throw new Error("서버 응답 오류");
             
             const data = await res.json();
@@ -188,7 +192,7 @@
             select.innerHTML = html;
         } catch (e) {
             console.error("국가 목록 로드 오류:", e);
-            document.getElementById('start-country').innerHTML = '<option value="0,0">🌍 전 세계 (직접 선택)</option><option value="37.566,126.978" selected>🇰🇷 대한민국 (비상 로드)</option>';
+            document.getElementById('start-country').innerHTML = '<option value="0,0">🌍 백엔드 서버(main.py)를 켜주세요!</option>';
         } finally {
             const btn = document.getElementById('btn-start');
             btn.innerText = "역사 속으로 뛰어들기";
@@ -267,7 +271,7 @@
                 capital: parseInt(document.getElementById('start-cap').value)
             };
             
-            const res = await fetch('/api/setup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+            const res = await fetch(`${API_BASE}/api/setup`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
             if (!res.ok) throw new Error("게임 시작 실패");
             
             document.getElementById('setup-modal').style.display = 'none';
@@ -292,13 +296,13 @@
             fetchState();
         } catch (e) {
             console.error("게임 초기화 오류:", e);
-            alert("“게임 초기화 중 서버 오류가 발생했습니다.”");
+            alert("“서버와 연결할 수 없습니다. 파이썬 백엔드가 켜져 있는지 확인하세요.”");
         }
     }
 
     async function fetchState() {
         try {
-            const res = await fetch('/api/state');
+            const res = await fetch(`${API_BASE}/api/state`);
             const data = await res.json();
             if (!data.is_started) return;
 
@@ -349,7 +353,7 @@
     }
 
     async function loadTechs() {
-        const res = await fetch('/api/techs');
+        const res = await fetch(`${API_BASE}/api/techs`);
         const data = await res.json();
         let html = '';
         data.tree.forEach(t => {
@@ -364,7 +368,7 @@
     }
 
     async function advanceTurn() {
-        const res = await fetch('/api/advance_year', {method: 'POST'});
+        const res = await fetch(`${API_BASE}/api/advance_year`, {method: 'POST'});
         const result = await res.json();
         if (result.status === 'event') {
             document.getElementById('ev-title').innerText = result.event_data.title;
@@ -379,15 +383,15 @@
 
     async function updateStance(val) {
         document.getElementById('ui-stance').innerText = val;
-        await fetch('/api/stance', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({stance: parseFloat(val)}) });
+        await fetch(`${API_BASE}/api/stance`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({stance: parseFloat(val)}) });
         mediaStance = parseFloat(val); updateChart();
     }
 
-    async function doAction(type) { await fetch(`/api/action/${type}`, {method: 'POST'}); fetchState(); }
-    async function manageHR(action, idx) { await fetch(`/api/hr/${action}?idx=${idx}`, {method: 'POST'}); fetchState(); }
-    async function resolveEvent(choiceId) { await fetch('/api/resolve_event', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({choice_id: choiceId}) }); document.getElementById('event-modal').style.display = 'none'; fetchState(); }
-    async function repairInfra(idx) { await fetch(`/api/repair/${idx}`, {method: 'POST'}); fetchState(); }
-    async function researchTech(id) { await fetch(`/api/research/${id}`, {method: 'POST'}); fetchState(); }
+    async function doAction(type) { await fetch(`${API_BASE}/api/action/${type}`, {method: 'POST'}); fetchState(); }
+    async function manageHR(action, idx) { await fetch(`${API_BASE}/api/hr/${action}?idx=${idx}`, {method: 'POST'}); fetchState(); }
+    async function resolveEvent(choiceId) { await fetch(`${API_BASE}/api/resolve_event`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({choice_id: choiceId}) }); document.getElementById('event-modal').style.display = 'none'; fetchState(); }
+    async function repairInfra(idx) { await fetch(`${API_BASE}/api/repair/${idx}`, {method: 'POST'}); fetchState(); }
+    async function researchTech(id) { await fetch(`${API_BASE}/api/research/${id}`, {method: 'POST'}); fetchState(); }
 
     async function buildInfra() {
         const typeVal = document.getElementById('tx-type').value;
@@ -403,7 +407,7 @@
             power_kw: parseInt(document.getElementById('tx-power').value), 
             lat: clickedLat, lon: clickedLon
         };
-        const res = await fetch('/api/build_infra', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        const res = await fetch(`${API_BASE}/api/build_infra`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
         if(res.ok) { 
             let color = typeVal === 'Print' ? 'gray' : (typeVal === 'Radio' ? 'green' : 'blue');
             L.circle([clickedLat, clickedLon], {radius: payload.power_kw * 1000, color: color, fillOpacity: 0.2}).addTo(map); 
