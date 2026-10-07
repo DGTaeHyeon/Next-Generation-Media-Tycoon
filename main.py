@@ -76,7 +76,7 @@ app = FastAPI()
 origins = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "https://본인의-깃허브-닉네임.github.io" # 실제 깃허브 페이지 도메인으로 바꾸시오!
+    "https://dgtaehyeon.github.io/Next-Generation-Media-Tycoon/"
 ]
 
 app.add_middleware(
