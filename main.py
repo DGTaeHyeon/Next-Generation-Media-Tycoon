@@ -284,3 +284,19 @@ def resolve_event(req: dict):
 
 @app.get("/api/techs")
 def get_techs(): return {"tree": TECH_TREE, "researched": game_state.get("researched_techs", []), "current_year": game_state.get("year", 1577)}
+
+# ==========================================
+# 3. 프론트엔드 (UI) 직접 서빙 라우트
+# ==========================================
+@app.get("/")
+def serve_html():
+    return FileResponse("index.html")
+
+@app.get("/style.css")
+def serve_css():
+    return FileResponse("style.css")
+
+@app.get("/script.js")
+def serve_js():
+    return FileResponse("script.js")
+
