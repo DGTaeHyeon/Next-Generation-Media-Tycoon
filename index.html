@@ -45,10 +45,9 @@
         <label><b>언론사 이름:</b></label>
         <input type="text" id="company-name" class="input-box" value="대제국일보">
         
-        <label><b>시작 거점 (AI가 역사적 국가 목록을 무한 생성 중):</b></label>
-        <select id="start-country" class="input-box">
-            <option value="0,0">🌍 백엔드 AI 통신 대기 중...</option>
-        </select>
+        <label><b>시작 거점 선택 (지도를 클릭하시오):</b></label>
+        <div id="setup-map" style="height: 200px; width: 100%; border-radius: 6px; margin: 10px 0; border: 1px solid #475569; z-index: 2001;"></div>
+        <p id="selected-coords" style="font-size: 13px; color: #a3e635; margin-top: -5px;">위치: 대한민국 서울 (기본값)</p>
 
         <label><b>시작 연도 (1577 ~ 2026):</b></label>
         <input type="number" id="start-year" class="input-box" min="1577" max="2026" value="1840">
@@ -67,10 +66,10 @@
             <option value="200000">₩ 200,000 (중견 기업)</option>
             <option value="1000000">₩ 1,000,000 (재벌 자본)</option>
         </select>
-        <button id="btn-start" style="width: 100%; margin-top: 15px; font-size: 16px; padding: 15px;" onclick="startGame()" disabled>AI 데이터 로딩 중...</button>
+        <button id="btn-start" style="width: 100%; margin-top: 15px; font-size: 16px; padding: 15px;" onclick="startGame()">역사 속으로 뛰어들기</button>
     </div>
 </div>
-
+    
 <div id="event-modal" class="overlay" style="display: none;">
     <div class="modal" style="border-color: #ef4444;">
         <h2 id="ev-title" style="color: #ef4444;">이벤트 발생</h2>
@@ -165,8 +164,20 @@ const API_BASE = isLocal
     let clickedLat = 37.566, clickedLon = 126.978;
     let overtonMu = 0.0, mediaStance = 0.0;
 
+    let setupMap, setupMarker;
+    let startLat = 37.566, startLon = 126.978;
+
     document.addEventListener("DOMContentLoaded", () => {
-        loadCountries();
+        setupMap = L.map('setup-map').setView([startLat, startLon], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(setupMap);
+        setupMarker = L.marker([startLat, startLon]).addTo(setupMap);
+
+        setupMap.on('click', function(e) { 
+            startLat = e.latlng.lat; 
+            startLon = e.latlng.lng; 
+            setupMarker.setLatLng([startLat, startLon]); 
+            document.getElementById('selected-coords').innerText = `선택된 좌표: 위도 ${startLat.toFixed(3)}, 경도 ${startLon.toFixed(3)}`;
+        });
     });
 
     async function loadCountries() {
@@ -257,13 +268,62 @@ const API_BASE = isLocal
     }
 
     async function startGame() {
+        const btn = document.getElementById('btn-start');
+        btn.innerText = "시대 고증 중... (AI 지리 분석)";
+        btn.disabled = true;
+
+        const reqYear = parseInt(document.getElementById('start-year').value);
+
         try {
-            const countryVal = document.getElementById('start-country').value;
-            if (countryVal) {
-                const coords = countryVal.split(',');
-                clickedLat = parseFloat(coords[0]);
-                clickedLon = parseFloat(coords[1]);
-            }
+            const geoRes = await fetch(`${API_BASE}/api/get_historical_country`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({lat: startLat, lon: startLon, year: reqYear})
+            });
+            const geoData = await geoRes.json();
+            const historicalCountry = geoData.country;
+
+            const payload = {
+                company_name: document.getElementById('company-name').value || "이름 없는 언론사",
+                start_year: reqYear,
+                difficulty: document.getElementById('difficulty').value,
+                capital: parseInt(document.getElementById('start-cap').value)
+            };
+            
+            const res = await fetch(`${API_BASE}/api/setup`, { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(payload) 
+            });
+            
+            if (!res.ok) throw new Error("게임 시작 실패");
+            
+            document.getElementById('setup-modal').style.display = 'none';
+            document.getElementById('game-ui').style.display = 'grid';
+            
+            setTimeout(() => {
+                if (!map) {
+                    map = L.map('map').setView([startLat, startLon], 5);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                    marker = L.marker([startLat, startLon]).addTo(map);
+                }
+                map.invalidateSize();
+            }, 300);
+            
+            initChart();
+            fetchState();
+
+            setTimeout(() => {
+                alert(`${reqYear}년, ${historicalCountry}에서 위대한 미디어 제국의 역사가 시작됩니다!`);
+            }, 500);
+
+        } catch (e) {
+            console.error("초기화 오류:", e);
+            alert("서버와 연결할 수 없습니다. 파이썬 백엔드가 구동 중인지 확인하시오.");
+            btn.innerText = "역사 속으로 뛰어들기";
+            btn.disabled = false;
+        }
+    }
             
             let initialZoom = (clickedLat === 0 && clickedLon === 0) ? 2 : 5;
 
