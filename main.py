@@ -2,6 +2,7 @@ import os
 import json
 import random
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import google.generativeai as genai
@@ -12,7 +13,6 @@ import google.generativeai as genai
 GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
 if GEMINI_API_KEY != "YOUR_GEMINI_API_KEY_HERE":
     genai.configure(api_key=GEMINI_API_KEY)
-    # 넉넉한 출력 토큰을 위해 모델 설정
     model = genai.GenerativeModel('gemini-2.5-flash')
 else:
     model = None
@@ -20,19 +20,20 @@ else:
 def generate_dynamic_event_via_llm(year: int):
     if model is None: return None
     prompt = f"""당신은 ‘글로벌 미디어 제국 대전략 게임’의 역사 이벤트 엔진입니다.
-현재 게임 연도는 {year}년입니다. 1577년부터 2026년 사이의 위키백과 역사를 바탕으로, {year}년 전후의 ‘언론, 검열, 통신’ 관련 글로벌 사건을 하나 선정하여 대체 역사 선택지 5가지를 생성하십시오. 
-어떠한 가이드라인 텍스트 없이 오직 유효한 JSON 객체 하나만 출력하십시오.
+현재 게임 연도는 {year}년입니다. 1577년부터 2026년 사이의 위키백과 역사를 바탕으로, {year}년 전후의 언론, 미디어, 검열, 통신 기술 관련 글로벌 역사 사건을 하나 선정하여 5개의 대체 역사 선택지를 생성하십시오. 
+어떠한 예시나 가이드라인도 제공하지 않으니, 사건의 역사적 맥락에 맞춰 플레이어가 선택할 수 있는 5가지의 다양한 경로(권력 순응, 극단적 저항, 자본 결탁, 해외 도피 등)를 직접 구상하십시오.
+반드시 마크다운 없이 순수 JSON 객체로만 응답하십시오:
 
 {{
   "id": "dynamic_event_{year}",
   "title": "국기 이모지 + 연도 + 사건 명칭",
-  "desc": "이 사건의 위협이나 기회를 서술",
+  "desc": "이 사건이 미디어 생태계에 미치는 위협이나 기회를 서술",
   "choices": [
-    {{"id": "c1", "text": "선택지 1", "effect": "결과 요약"}},
-    {{"id": "c2", "text": "선택지 2", "effect": "결과 요약"}},
-    {{"id": "c3", "text": "선택지 3", "effect": "결과 요약"}},
-    {{"id": "c4", "text": "선택지 4", "effect": "결과 요약"}},
-    {{"id": "c5", "text": "선택지 5", "effect": "결과 요약"}}
+    {{"id": "c1", "text": "선택지 텍스트 1", "effect": "선택에 따른 게임 내 결과 요약 1"}},
+    {{"id": "c2", "text": "선택지 텍스트 2", "effect": "선택에 따른 게임 내 결과 요약 2"}},
+    {{"id": "c3", "text": "선택지 텍스트 3", "effect": "선택에 따른 게임 내 결과 요약 3"}},
+    {{"id": "c4", "text": "선택지 텍스트 4", "effect": "선택에 따른 게임 내 결과 요약 4"}},
+    {{"id": "c5", "text": "선택지 텍스트 5", "effect": "선택에 따른 게임 내 결과 요약 5"}}
   ]
 }}"""
     try:
@@ -47,18 +48,17 @@ def generate_dynamic_event_via_llm(year: int):
 def generate_countries_via_llm():
     if model is None: return None
     prompt = """당신은 ‘글로벌 미디어 제국 시뮬레이터’의 지리 엔진입니다.
-1577년부터 2026년까지 존재한 전 세계의 주요 현대 국가(UN 회원국), 미승인국(대만, 코소보 등), 그리고 역사적 제국(조선, 신성 로마 제국 등)을 최대한 방대하게(약 60~80개) 생성하십시오.
-출력 제한으로 JSON이 끊기지 않도록 주의하며, 반드시 유효한 JSON 배열([]) 구조로 끝맺어야 합니다. 수도 이름은 포함하지 마십시오.
+1577년부터 2026년까지 존재한 전 세계의 주요 현대 국가, 모든 UN 회원국, 주요 미승인국(대만, 코소보 등), 그리고 역사적 제국(조선, 신성 로마 제국, 대영제국 등)을 최대한 방대하게 포괄하는 국가 데이터 배열을 생성하십시오.
+국가의 수량에 어떠한 제한도 두지 마십시오. 모델의 출력 한계가 허용하는 한 최대한 많은 국가와 제국을 도출하십시오.
+선택지의 label에는 수도 이름을 절대 포함하지 마십시오. 반드시 유효한 JSON 배열([]) 구조로 끝맺어야 합니다.
 
 [
-  {"label": "🌍 전 세계 (직접 선택)", "lat": 0.0, "lon": 0.0, "group": "특수"},
-  {"label": "🇰🇷 대한민국 / 조선", "lat": 37.566, "lon": 126.978, "group": "동아시아"},
-  {"label": "🇽🇰 코소보", "lat": 42.662, "lon": 21.165, "group": "미승인국 및 특수 지위"}
+  {"label": "🌍 전 세계 (지도를 직접 스크롤하여 선택)", "lat": 0.0, "lon": 0.0, "group": "특수"},
+  {"label": "국기 이모지 + 국가명/제국명", "lat": 위도, "lon": 경도, "group": "대륙 또는 시대별 분류명"}
 ]"""
     try:
         response = model.generate_content(prompt)
         text = response.text
-        # LLM이 마크다운이나 헛소리를 섞어도 순수 배열만 파싱해내는 안전장치
         start = text.find('[')
         end = text.rfind(']')
         if start != -1 and end != -1:
@@ -68,9 +68,18 @@ def generate_countries_via_llm():
         return None
 
 # ==========================================
-# 2. 게임 코어 엔진 및 초기 설정
+# 2. 게임 코어 엔진
 # ==========================================
 app = FastAPI()
+
+# 깃허브 페이지 등 외부 HTML에서 API를 호출할 수 있도록 CORS 허용
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 TECH_TREE = [
     {"id": "tech_jobo", "name": "민간 조보", "invent_year": 1577, "comm_year": 1577, "cost": 1000, "desc": "수기 필사 정보 전달"},
@@ -135,10 +144,7 @@ def get_countries():
             cached_countries = [
                 {"label": "🌍 전 세계 (지도를 직접 스크롤하여 선택)", "lat": 0, "lon": 0, "group": "특수"},
                 {"label": "🇰🇷 대한민국 / 조선", "lat": 37.566, "lon": 126.978, "group": "동아시아"},
-                {"label": "🇹🇼 대만 / 중화민국", "lat": 25.033, "lon": 121.565, "group": "동아시아"},
-                {"label": "🇬🇧 영국 / 대영제국", "lat": 51.507, "lon": -0.127, "group": "유럽"},
-                {"label": "🇺🇸 미국", "lat": 38.907, "lon": -77.036, "group": "아메리카"},
-                {"label": "🇽🇰 코소보", "lat": 42.662, "lon": 21.165, "group": "미승인국"}
+                {"label": "🇬🇧 영국 / 대영제국", "lat": 51.507, "lon": -0.127, "group": "유럽"}
             ]
     return cached_countries
 
@@ -159,9 +165,9 @@ def advance_year():
         dyn_ev = generate_dynamic_event_via_llm(cy)
         if not dyn_ev: 
             dyn_ev = {"id": f"ev_{cy}", "title": f"🌍 {cy}년: 미디어 격변기", "desc": "거대한 사회적 변화가 도래했습니다.", 
-                      "choices": [{"id":"c1","text":"“순응”","effect":"신뢰도 하락"},{"id":"c2","text":"“결탁”","effect":"타사 흡수"},
-                                  {"id":"c3","text":"“회피”","effect":"영향력 감소"},{"id":"c4","text":"“외세 개입”","effect":"외화 유출"},
-                                  {"id":"c5","text":"“지하 언론화”","effect":"인프라 몰수"}]}
+                      "choices": [{"id":"c1","text":"선택 1","effect":"-"},{"id":"c2","text":"선택 2","effect":"-"},
+                                  {"id":"c3","text":"선택 3","effect":"-"},{"id":"c4","text":"선택 4","effect":"-"},
+                                  {"id":"c5","text":"선택 5","effect":"-"}]}
         game_state["pending_event"] = dyn_ev
         return {"status": "event", "event_data": game_state["pending_event"]}
 
@@ -198,7 +204,7 @@ def perform_action(action_type: str):
         game_state["credibility"] = min(100, game_state["credibility"] + 25)
         game_state["reach"] += 1500
         game_state["capital"] -= 20000
-        game_state["logs"].append("🔥 “거악 폭로!” 신뢰도가 치솟았으나 분노한 권력이 보이콧했습니다.")
+        game_state["logs"].append("🔥 “거악 폭로!” 신뢰도가 치솟았으나 분노한 권력과 대기업이 보이콧했습니다.")
     elif action_type == "advertorial":
         game_state["capital"] += 30000
         game_state["credibility"] = max(0, game_state["credibility"] - 12)
