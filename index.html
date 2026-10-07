@@ -154,9 +154,12 @@
 </div>
 
 <script>
-    // 배포 환경(GitHub Pages)과 로컬 서버를 맞추기 위한 API 경로 설정
-    // 파이썬 서버(uvicorn)가 켜져 있는 주소를 기입해야 외부에서 접근할 수 있습니다.
-    const API_BASE = "http://127.0.0.1:8000"; 
+    // 현재 접속한 주소가 로컬인지 확인하여 자동으로 서버 주소를 변경하오!
+const isLocal = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
+
+const API_BASE = isLocal 
+    ? "http://127.0.0.1:8000" 
+    : "https://dgtaehyeon.github.io/Next-Generation-Media-Tycoon/";
     
     let map, marker, chart;
     let clickedLat = 37.566, clickedLon = 126.978;
