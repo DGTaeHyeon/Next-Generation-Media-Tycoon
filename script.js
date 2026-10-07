@@ -1,8 +1,6 @@
 // 현재 접속 환경(로컬 파일 열기, 로컬 서버, 외부 배포)을 감지하여 백엔드 주소를 자동 연결합니다.
 const isLocal = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost" || window.location.hostname === "";
-const API_BASE = isLocal 
-    ? "http://127.0.0.1:8000" 
-    : "https://새로-배포하실-백엔드-주소.com"; // 나중에 배포하시면 여기만 수정하세요!
+const API_BASE = ""; 
 
 let map, marker, chart;
 let setupMap, setupMarker;
