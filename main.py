@@ -49,14 +49,6 @@ def generate_dynamic_event_via_llm(year: int):
 # ==========================================
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], # 모든 도메인 허용 (개발 및 깃허브 배포 시 충돌 방지)
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 TECH_TREE = [
     {"id": "tech_jobo", "name": "민간 조보", "invent_year": 1577, "comm_year": 1577, "cost": 1000, "desc": "수기 필사 정보 전달"},
     {"id": "tech_steam_press", "name": "증기 구동 인쇄기", "invent_year": 1814, "comm_year": 1814, "cost": 15000, "desc": "대량 인쇄 시대 개막"},
