@@ -16,8 +16,17 @@ let gameState = {
 const TECH_TREE = [
     {id: "tech_jobo", name: "민간 조보", invent_year: 1577, comm_year: 1577, cost: 1000, desc: "수기 필사 정보 전달"},
     {id: "tech_steam_press", name: "증기 구동 인쇄기", invent_year: 1814, comm_year: 1814, cost: 15000, desc: "대량 인쇄 시대 개막"},
-    {id: "tech_telegraph", name: "유선 전신망", invent_year: 1837, comm_year: 1844, cost: 45000, desc: "해외 속보 수신"}
-    // 필요 시 기술 추가
+    {id: "tech_telegraph", name: "유선 전신망", invent_year: 1837, comm_year: 1844, cost: 45000, desc: "해외 속보 수신"},
+    {id: "tech_rotary_press", name: "윤전기", invent_year: 1843, comm_year: 1846, cost: 30000, desc: "옐로 저널리즘 탄생"},
+    {id: "tech_am_radio", name: "AM 라디오", invent_year: 1901, comm_year: 1920, cost: 80000, desc: "실시간 전파 방송"},
+    {id: "tech_bw_tv", name: "흑백 TV", invent_year: 1927, comm_year: 1941, cost: 150000, desc: "영상 광고 해금"},
+    {id: "tech_fm_radio", name: "FM 라디오", invent_year: 1933, comm_year: 1940, cost: 120000, desc: "고음질 채널 세분화"},
+    {id: "tech_color_tv", name: "컬러 TV", invent_year: 1953, comm_year: 1960, cost: 250000, desc: "시청자 몰입도 극대화"},
+    {id: "tech_cable_24h", name: "24시간 뉴스 케이블", invent_year: 1980, comm_year: 1980, cost: 400000, desc: "지상파 독과점 붕괴"},
+    {id: "tech_web_news", name: "웹 신문", invent_year: 1989, comm_year: 1994, cost: 150000, desc: "디지털 뉴스룸"},
+    {id: "tech_dtv", name: "디지털 방송", invent_year: 1998, comm_year: 2000, cost: 600000, desc: "대역폭 분할"},
+    {id: "tech_smartphone", name: "스마트폰 앱", invent_year: 2007, comm_year: 2010, cost: 350000, desc: "알고리즘 피드 해금"},
+    {id: "tech_ai_news", name: "AI 기사", invent_year: 2020, comm_year: 2023, cost: 200000, desc: "제작비 제로화"}
 ];
 
 // ==========================================
@@ -242,23 +251,113 @@ function researchTech(id) {
     }
 }
 
+function updateBandFormatOptions() {
+    const typeSelect = document.getElementById('tx-type').value;
+    const bandSelect = document.getElementById('tx-band');
+    const formatSelect = document.getElementById('tx-format');
+    const callsignInput = document.getElementById('tx-callsign');
+
+    if (typeSelect === 'Print') {
+        bandSelect.innerHTML = '<option value="Print">인쇄/필사</option>';
+        bandSelect.disabled = true;
+        formatSelect.innerHTML = '<option value="None">해당 없음</option>';
+        formatSelect.disabled = true;
+        callsignInput.disabled = true;
+        callsignInput.value = '';
+        callsignInput.placeholder = "호출부호 없음 (인쇄)";
+    } else if (typeSelect === 'Radio') {
+        bandSelect.innerHTML = '<option value="LW">AM 장파 (LW)</option><option value="MW">AM 중파 (MW)</option><option value="SW">AM 단파 (SW)</option><option value="FM">FM 초단파</option>';
+        bandSelect.disabled = false;
+        formatSelect.innerHTML = '<option value="None">해당 없음</option>';
+        formatSelect.disabled = true;
+        callsignInput.disabled = false;
+        callsignInput.placeholder = "호출부호 (예: HLKV)";
+    } else {
+        bandSelect.innerHTML = '<option value="VHF">TV VHF</option><option value="UHF">TV UHF</option>';
+        bandSelect.disabled = false;
+        formatSelect.innerHTML = '<option value="NTSC">NTSC</option><option value="PAL">PAL</option><option value="SECAM">SECAM</option><option value="ATSC">ATSC</option><option value="DVB">DVB</option><option value="ISDB">ISDB</option><option value="DTMB">DTMB</option>';
+        formatSelect.disabled = false;
+        callsignInput.disabled = false;
+        callsignInput.placeholder = "호출부호 (예: HLKV)";
+    }
+}
+
 function buildInfra() {
-    let cost = document.getElementById('tx-type').value === "Print" ? 10000 + (parseInt(document.getElementById('tx-power').value)*100) : 20000 + (parseInt(document.getElementById('tx-power').value)*150);
+    const typeVal = document.getElementById('tx-type').value;
+    const nameVal = document.getElementById('tx-name').value || "지점";
+    const powerVal = parseInt(document.getElementById('tx-power').value);
+    const formatSelect = document.getElementById('tx-format');
+    const callsignInput = document.getElementById('tx-callsign');
+    const bandSelect = document.getElementById('tx-band');
+    
+    let callsign = callsignInput.disabled ? "" : callsignInput.value;
+    let band = bandSelect.disabled ? "인쇄 지국" : bandSelect.value;
+    let format = formatSelect.disabled ? "활자 매체" : formatSelect.value;
+    
+    let cost = 0;
+    let reachGain = 0;
+    let logMsg = "";
+
+    if (typeVal === "Print") {
+        cost = 10000 + (powerVal * 100);
+        reachGain = powerVal * 15;
+        logMsg = `🗞️ ‘${nameVal}’ 인쇄 지국 가동! (발행량: ${powerVal}천 부)`;
+    } else {
+        cost = 20000 + (powerVal * 150);
+        // 디지털 TV 방송망 구축 시 막대한 추가 비용 고증 부활
+        if (typeVal === "TV" && ["ATSC", "DVB", "ISDB", "DTMB"].includes(format)) {
+            cost += 50000; 
+        }
+        reachGain = powerVal * 20;
+        let cs_str = callsign ? `[${callsign}] ` : "";
+        logMsg = `📡 ${cs_str}‘${nameVal}’ (${band}/${format}) 송출 가동!`;
+    }
+
     if (gameState.capital >= cost) {
         gameState.capital -= cost;
         gameState.infra.push({
-            type: document.getElementById('tx-type').value, name: document.getElementById('tx-name').value || "지점",
-            band: document.getElementById('tx-band').disabled ? "인쇄" : document.getElementById('tx-band').value,
-            format: document.getElementById('tx-format').disabled ? "활자" : document.getElementById('tx-format').value,
-            power_kw: parseInt(document.getElementById('tx-power').value), durability: 100, lat: clickedLat, lon: clickedLon
+            type: typeVal, name: nameVal, callsign: callsign, band: band, format: format,
+            power_kw: powerVal, durability: 100, lat: clickedLat, lon: clickedLon
         });
-        gameState.reach += parseInt(document.getElementById('tx-power').value) * 15;
+        gameState.reach += reachGain;
+        gameState.logs.push(logMsg);
         updateUI();
-    } else alert("자본이 부족합니다.");
+    } else {
+        alert("자본이 부족합니다.");
+    }
 }
 
 function repairInfra(idx) { if(gameState.capital >= 15000) { gameState.capital-=15000; gameState.infra[idx].durability = 100; updateUI(); } }
 function updateStance(val) { gameState.media_stance = parseFloat(val); document.getElementById('ui-stance').innerText = val; updateUI(); }
-function updateBandFormatOptions() { /* 기존 함수 유지, 생략 */ }
-function initChart() { /* 기존 함수 유지, 생략 */ }
-function updateChart() { /* 기존 함수 유지, 생략 */ }
+
+function initChart() {
+    const ctx = document.getElementById('overtonChart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: Array.from({length: 61}, (_, i) => (i - 30) / 10),
+            datasets: [
+                { label: '대중 여론', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.3)', fill: true, pointRadius: 0 },
+                { label: '데스크 논조', data: [], borderColor: '#ef4444', borderDash: [5, 5], pointRadius: 0, borderWidth: 2, fill: false }
+            ]
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            scales: { 
+                x: { ticks: { color: '#94a3b8' } }, 
+                y: { display: false, max: 1.1 } 
+            }, 
+            animation: { duration: 400 } 
+        }
+    });
+}
+
+function updateChart() {
+    let labels = chart.data.labels;
+    // 대중 여론 (정규분포 곡선)
+    chart.data.datasets[0].data = labels.map(x => Math.exp(-0.5 * Math.pow((x - overtonMu) / 1.0, 2)));
+    // 데스크 논조 (막대형 표시)
+    chart.data.datasets[1].data = labels.map(x => (Math.abs(x - mediaStance) < 0.05) ? 1.0 : 0);
+    chart.update();
+}
