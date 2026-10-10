@@ -1,5 +1,5 @@
 # Next-Generation-Media-Tycoon
-현실감 있게 언론의 제왕이 되어보세요 - Idea by @bigurban | Realized with Google Gemini
+현실감 있게 언론의 제왕이 되어보세요 - Idea by @Bigurban | Realized with Google Gemini
 
 ## 버전업 데이터
 * 버전 1.0.0 (ROK 108(2026). 10. 06)
